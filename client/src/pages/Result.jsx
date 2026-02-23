@@ -1,67 +1,63 @@
 export default function Result({ result, word, category, isDM, myRole, onPlayAgain }) {
-  const isTimedOut = result?.timedOut;
-  const gamePlayers = result?.gamePlayers || [];
-  const roles = result?.roles || {};
+  const isTimedOut = result?.timedOut
+  const gamePlayers = result?.gamePlayers || []
+  const roles = result?.roles || {}
+
+  const ROLE_BADGE = {
+    Master: 'badge--master',
+    Insider: 'badge--insider',
+    Common: 'badge--common',
+  }
 
   return (
-    <div className="page result">
-      {/* Banner */}
-      <div className={`result-banner ${isTimedOut ? 'timeout' : ''}`}>
-        {isTimedOut ? (
-          <>
-            <h2>⏰ หมดเวลา!</h2>
-            <div className="word-reveal">
-              <p>📂 {result?.category || category}</p>
-              <h1>「{result?.word || word}」</h1>
-            </div>
-          </>
-        ) : (
-          <h2>🔍 เฉลย!</h2>
-        )}
+    <div className="page fade-in">
+      <div className={`reveal-banner${isTimedOut ? ' reveal-banner--timeout' : ''}`}>
+        <p className="reveal-banner__label">{isTimedOut ? 'หมดเวลา' : 'เฉลยผล'}</p>
+        <p className="reveal-banner__word">{result?.word || word}</p>
+        <p className="reveal-banner__category">{result?.category || category}</p>
       </div>
 
-      {/* Insider Reveal */}
       <div className="insider-reveal">
-        <p>Insider คือ...</p>
-        <h1 className="insider-name">🕵️ {result?.insider}</h1>
+        <p className="insider-reveal__label">Insider คือ</p>
+        <div className="insider-reveal__image">
+          <span className="insider-reveal__initial">{result?.insider?.[0] || '?'}</span>
+        </div>
+        <p className="insider-reveal__name">{result?.insider}</p>
       </div>
 
-      {/* บทบาทของคุณ */}
-      <div className="your-role-box">
-        บทบาทของคุณ: <strong>{myRole}</strong>
+      <div className="card">
+        <div className="card__header">
+          <span className="card__title">บทบาทของทุกคน</span>
+          <span className="badge badge--neutral">บทบาทคุณ: {myRole}</span>
+        </div>
+        <ul className="role-list">
+          {gamePlayers.map(p => {
+            const role = roles[p.id]
+            const isInsider = p.id === result?.insiderId
+            return (
+              <li key={p.id} className={`role-list__row${isInsider ? ' role-list__row--insider' : ''}`}>
+                <span className="role-list__name">{p.name}</span>
+                <span className={`badge ${ROLE_BADGE[role] || ''}`}>{role}</span>
+              </li>
+            )
+          })}
+        </ul>
       </div>
 
-      {/* บทบาททั้งหมด */}
-      <div className="all-roles">
-        <h3>บทบาททั้งหมด</h3>
-        {gamePlayers.map(p => {
-          const role = roles[p.id];
-          const isInsider = p.id === result?.insiderId;
-          return (
-            <div key={p.id} className={`role-item ${isInsider ? 'insider' : ''}`}>
-              <span>{p.name}</span>
-              <span className="role-tag">
-                {role === 'Master' && '👑 Master'}
-                {role === 'Insider' && '🕵️ Insider'}
-                {role === 'Common' && '👤 Common'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* DM: เล่นรอบใหม่ */}
       {isDM ? (
-        <div className="dm-controls">
-          <button className="btn btn-primary btn-large" onClick={onPlayAgain}>
-            🔄 เล่นรอบใหม่
+        <div className="bottom-actions">
+          <button className="btn btn--primary btn--lg" onClick={onPlayAgain}>
+            เล่นรอบใหม่
           </button>
         </div>
       ) : (
-        <div className="waiting">
-          <p>⏳ รอ DM เริ่มรอบใหม่...</p>
+        <div className="waiting-state">
+          <span className="waiting-dot" />
+          <span className="waiting-dot" />
+          <span className="waiting-dot" />
+          <p>รอ DM เริ่มรอบใหม่</p>
         </div>
       )}
     </div>
-  );
+  )
 }

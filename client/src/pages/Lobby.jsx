@@ -3,31 +3,37 @@ export default function Lobby({
   onSetTimer, onStartGame, error
 }) {
   return (
-    <div className="page lobby">
-      {/* รหัสห้อง */}
-      <div className="room-code-display">
-        <p>รหัสห้อง</p>
-        <h2>{roomCode}</h2>
-        <p className="hint">ส่งรหัสนี้ให้เพื่อน</p>
+    <div className="page fade-in">
+      <div className="room-code-box">
+        <p className="room-code-label">รหัสห้อง</p>
+        <p className="room-code-value">{roomCode}</p>
+        <p className="room-code-hint">แชร์รหัสนี้ให้เพื่อน</p>
       </div>
 
-      {/* รายชื่อผู้เล่น */}
-      <div className="player-list-box">
-        <h3>👥 ผู้เล่น ({players.length} คน)</h3>
-        {players.map(p => (
-          <div key={p.id} className="player-item">
-            <span>{p.isDM ? '👑' : '👤'} {p.name}</span>
-            {p.isDM && <span className="dm-badge">DM</span>}
-          </div>
-        ))}
+      <div className="card">
+        <div className="card__header">
+          <span className="card__title">ผู้เล่น</span>
+          <span className="badge badge--accent">{players.length} คน</span>
+        </div>
+        <ul className="player-list">
+          {players.map(p => (
+            <li key={p.id} className="player-row">
+              <span className="player-name">{p.name}</span>
+              {p.isDM && <span className="badge badge--accent">DM</span>}
+            </li>
+          ))}
+        </ul>
       </div>
 
-      {/* DM Controls */}
       {isDM ? (
-        <div className="dm-controls">
-          <div className="timer-setting">
-            <label>⏱️ เวลาเล่น</label>
-            <select value={timerSetting} onChange={e => onSetTimer(Number(e.target.value))}>
+        <div className="bottom-actions">
+          <div className="field">
+            <label className="field__label">เวลาเล่น</label>
+            <select
+              className="field__input"
+              value={timerSetting}
+              onChange={e => onSetTimer(Number(e.target.value))}
+            >
               <option value={180}>3 นาที</option>
               <option value={300}>5 นาที</option>
               <option value={420}>7 นาที</option>
@@ -35,24 +41,26 @@ export default function Lobby({
             </select>
           </div>
           <button
-            className="btn btn-primary btn-large"
+            className="btn btn--primary btn--lg"
             disabled={players.length < 4}
             onClick={onStartGame}
           >
-            🎲 เริ่มเกม!
+            เริ่มเกม
           </button>
           {players.length < 4 && (
-            <p className="hint">ต้องมีอย่างน้อย 4 คน (ตอนนี้ {players.length})</p>
+            <p className="hint-text">ต้องมีผู้เล่นอย่างน้อย 4 คน (ปัจจุบัน {players.length})</p>
           )}
         </div>
       ) : (
-        <div className="waiting">
-          <div className="waiting-spinner">⏳</div>
-          <p>รอ DM เริ่มเกม...</p>
+        <div className="waiting-state">
+          <span className="waiting-dot" />
+          <span className="waiting-dot" />
+          <span className="waiting-dot" />
+          <p>รอ DM เริ่มเกม</p>
         </div>
       )}
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error-text">{error}</p>}
     </div>
-  );
+  )
 }
