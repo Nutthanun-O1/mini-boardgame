@@ -24,15 +24,15 @@ export const ROLE_IMAGES = {
 export const ROLE_INFO = {
   Master: {
     label: 'Master (DM)',
-    description: 'คุณรู้คำลับ — ตอบคำถาม Yes/No ของผู้เล่น',
+    description: 'ผู้ดำเนินเกม',
   },
   Insider: {
     label: 'Insider',
-    description: 'คุณรู้คำลับ — แฝงตัวช่วยนำทางโดยไม่ให้ถูกจับได้',
+    description: 'ใบคำลับแบบเนียนๆ',
   },
   Common: {
     label: 'Common',
-    description: 'คุณไม่รู้คำลับ — ถามคำถาม Yes/No เพื่อหาคำตอบ',
+    description: 'ถามคำถามไปเรื่อยๆ',
   },
 };
 
