@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS rooms (
   timer_duration INTEGER NOT NULL DEFAULT 300,
   timer_started_at BIGINT,          -- Date.now() ms timestamp
 
+  -- Insider config (set in lobby)
+  difficulty     TEXT    NOT NULL DEFAULT 'medium',   -- easy / medium / hard
+  dm_mode        TEXT    NOT NULL DEFAULT 'creator',  -- creator / random / <playerId>
+  word_pick      BOOLEAN NOT NULL DEFAULT FALSE,      -- word-choice phase on/off
+  word_choices   JSONB,                               -- [{word,category},...] 6 choices
+
   -- Insider fields
   word           TEXT,
   category       TEXT,

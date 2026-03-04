@@ -725,9 +725,7 @@ select.field__input {
   transition: border-color var(--transition);
 }
 
-.role-card.role--master  { border-color: var(--color-master); }
-.role-card.role--insider { border-color: var(--color-insider); }
-.role-card.role--common  { border-color: var(--color-common); }
+/* unified border – no role-specific colours (anti-peek) */
 
 /* ── Cover (hidden state) ── */
 .role-card__cover {
@@ -787,13 +785,7 @@ select.field__input {
   color: var(--color-text-muted);
 }
 
-.role--master .role-card__art-initial  { color: var(--color-master); }
-.role--insider .role-card__art-initial { color: var(--color-insider); }
-.role--common .role-card__art-initial  { color: var(--color-common); }
-
-.role--master .role-card__art  { background: rgba(212, 160, 48, 0.06); }
-.role--insider .role-card__art { background: rgba(232, 80, 80, 0.06); }
-.role--common .role-card__art  { background: rgba(85, 128, 240, 0.06); }
+/* unified art colours – no role-specific tints (anti-peek) */
 
 /* ── Info section ── */
 .role-card__info {
@@ -812,9 +804,7 @@ select.field__input {
   letter-spacing: 2px;
 }
 
-.role--master .role-card__label  { color: var(--color-master); }
-.role--insider .role-card__label { color: var(--color-insider); }
-.role--common .role-card__label  { color: var(--color-common); }
+.role-card__label { color: var(--color-accent); }
 
 .role-card__desc {
   font-size: 0.85rem;
@@ -1547,4 +1537,88 @@ select.field__input {
   background: var(--color-surface-2);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-sm);
+}
+
+
+/* =============================================
+   LOBBY CONFIG CONTROLS
+   ============================================= */
+
+.btn-group {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.btn-group .btn {
+  flex: 1;
+}
+
+.field--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.field--toggle .field__label {
+  margin-bottom: 0;
+}
+
+.toggle-btn {
+  min-width: 60px;
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.toggle-btn--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+
+/* =============================================
+   WORD PICK
+   ============================================= */
+
+.word-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.word-pick-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg) var(--space-md);
+  background: var(--color-surface-2);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.word-pick-card:hover {
+  border-color: var(--color-border-strong);
+}
+
+.word-pick-card--selected {
+  border-color: var(--color-accent);
+  background: rgba(85, 128, 240, 0.08);
+}
+
+.word-pick-card__word {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
 }

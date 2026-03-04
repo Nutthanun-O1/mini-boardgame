@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSupabase, getPlayerId } from '@/lib/supabase';
 import {
-  generateRoomCode, pickWord, pickSpyfallLocation,
+  generateRoomCode, pickWord, pickWordChoices, pickSpyfallLocation,
   ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
 } from '@/lib/gameData';
 import GameSelect from '@/components/GameSelect';
 import Home from '@/components/Home';
 import Lobby from '@/components/Lobby';
+import WordPick from '@/components/WordPick';
 import Playing from '@/components/Playing';
 import Discussion from '@/components/Discussion';
 import Result from '@/components/Result';
@@ -34,6 +35,12 @@ export default function Page() {
   const [timerSetting, setTimerSetting] = useState(300);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+
+  // ── Insider config state ──
+  const [difficulty, setDifficulty] = useState('medium');
+  const [dmMode, setDmMode] = useState('creator');
+  const [wordPick, setWordPick] = useState(false);
+  const [wordChoices, setWordChoices] = useState(null);
 
   // ── Spyfall-specific state ──
   const [spyfallLocation, setSpyfallLocation] = useState(null);
@@ -102,6 +109,9 @@ export default function Page() {
 
     setGameId(room.game_id);
     setTimerSetting(room.timer_duration);
+    setDifficulty(room.difficulty || 'medium');
+    setDmMode(room.dm_mode || 'creator');
+    setWordPick(room.word_pick || false);
     if (role) setMyRole(role);
 
     switch (room.phase) {
@@ -118,6 +128,12 @@ export default function Page() {
         setSpyfallLocations([]);
         setSpyfallVoteInfo(null);
         setSpyfallLastChance(null);
+        setWordChoices(null);
+        break;
+
+      case 'word-pick':
+        setPhase('word-pick');
+        setWordChoices(room.word_choices || []);
         break;
 
       case 'playing':
@@ -343,6 +359,7 @@ export default function Page() {
     setSpyfallLocations([]);
     setSpyfallVoteInfo(null);
     setSpyfallLastChance(null);
+    setWordChoices(null);
     roomRef.current = null;
     timeUpFiredRef.current = false;
   }
@@ -421,6 +438,42 @@ export default function Page() {
       .eq('code', roomCode);
   }
 
+  async function handleSetDifficulty(val) {
+    setDifficulty(val);
+    await getSupabase().from('rooms')
+      .update({ difficulty: val })
+      .eq('code', roomCode);
+  }
+
+  async function handleSetDmMode(val) {
+    setDmMode(val);
+    await getSupabase().from('rooms')
+      .update({ dm_mode: val })
+      .eq('code', roomCode);
+  }
+
+  async function handleSetWordPick(val) {
+    setWordPick(val);
+    await getSupabase().from('rooms')
+      .update({ word_pick: val })
+      .eq('code', roomCode);
+  }
+
+  /**
+   * Determine who the DM should be based on dm_mode setting.
+   */
+  function resolveDM(pls, room) {
+    const mode = room.dm_mode || 'creator';
+    if (mode === 'creator') {
+      return pls.find(p => p.isDM) || pls[0];
+    }
+    if (mode === 'random') {
+      return pls[Math.floor(Math.random() * pls.length)];
+    }
+    // mode is a specific player ID
+    return pls.find(p => p.id === mode) || pls.find(p => p.isDM) || pls[0];
+  }
+
   async function handleStartGame() {
     const room = roomRef.current;
     if (!room) return;
@@ -455,30 +508,72 @@ export default function Page() {
       // ─── Insider start ───
       if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
 
-      const { word: w, category: cat } = pickWord();
-      const dmPlayer = pls.find(p => p.isDM);
-      const nonDM = pls.filter(p => !p.isDM);
+      const diff = room.difficulty || 'medium';
+      const dmPlayer = resolveDM(pls, room);
+      const nonDM = pls.filter(p => p.id !== dmPlayer.id);
       const insiderIdx = Math.floor(Math.random() * nonDM.length);
       const insiderPlayer = nonDM[insiderIdx];
 
       const roles = {};
       pls.forEach(p => {
-        if (p.id === dmPlayer?.id) roles[p.id] = 'Master';
+        if (p.id === dmPlayer.id) roles[p.id] = 'Master';
         else if (p.id === insiderPlayer.id) roles[p.id] = 'Insider';
         else roles[p.id] = 'Common';
       });
 
-      await getSupabase().from('rooms').update({
-        phase: 'playing',
-        timer_started_at: Date.now(),
-        word: w,
-        category: cat,
-        insider_id: insiderPlayer.id,
-        insider_name: insiderPlayer.name,
-        roles,
-        result: null,
-      }).eq('code', roomCode);
+      // Update DM flag in players table if DM changed
+      if (!dmPlayer.isDM) {
+        // Remove old DM flag
+        await getSupabase().from('players')
+          .update({ is_dm: false })
+          .eq('room_code', roomCode).eq('is_dm', true);
+        // Set new DM
+        await getSupabase().from('players')
+          .update({ is_dm: true })
+          .eq('room_code', roomCode).eq('id', dmPlayer.id);
+      }
+
+      if (room.word_pick) {
+        // Word-pick mode: go to word-pick phase first
+        const choices = pickWordChoices(diff, 6);
+        await getSupabase().from('rooms').update({
+          phase: 'word-pick',
+          word_choices: choices,
+          dm_id: dmPlayer.id,
+          insider_id: insiderPlayer.id,
+          insider_name: insiderPlayer.name,
+          roles,
+          result: null,
+        }).eq('code', roomCode);
+      } else {
+        // Normal mode: pick word automatically
+        const { word: w, category: cat } = pickWord(diff);
+        await getSupabase().from('rooms').update({
+          phase: 'playing',
+          timer_started_at: Date.now(),
+          word: w,
+          category: cat,
+          dm_id: dmPlayer.id,
+          insider_id: insiderPlayer.id,
+          insider_name: insiderPlayer.name,
+          roles,
+          result: null,
+        }).eq('code', roomCode);
+      }
     }
+  }
+
+  /**
+   * DM picks a word during word-pick phase → advance to playing.
+   */
+  async function handlePickWord({ word: w, category: cat }) {
+    await getSupabase().from('rooms').update({
+      phase: 'playing',
+      timer_started_at: Date.now(),
+      word: w,
+      category: cat,
+      word_choices: null,
+    }).eq('code', roomCode);
   }
 
   async function handleGuessCorrect() {
@@ -636,6 +731,7 @@ export default function Page() {
       spyfall_vote_active: false,
       spyfall_vote_caller: null, spyfall_vote_target: null,
       spyfall_votes: {},
+      word_choices: null,
       result: null,
     }).eq('code', roomCode);
   }
@@ -697,9 +793,25 @@ export default function Page() {
         {phase === 'lobby' && (
           <Lobby
             {...shared}
+            gameId={gameId}
             timerSetting={timerSetting}
+            difficulty={difficulty}
+            dmMode={dmMode}
+            wordPick={wordPick}
             onSetTimer={handleSetTimer}
+            onSetDifficulty={handleSetDifficulty}
+            onSetDmMode={handleSetDmMode}
+            onSetWordPick={handleSetWordPick}
             onStartGame={handleStartGame}
+          />
+        )}
+
+        {/* ── Word-pick phase (Insider only) ── */}
+        {phase === 'word-pick' && (
+          <WordPick
+            isDM={isDM}
+            choices={wordChoices}
+            onPickWord={handlePickWord}
           />
         )}
 
