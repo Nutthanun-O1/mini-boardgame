@@ -1,0 +1,13 @@
+# Render Blueprint — deploy server.js as a Web Service
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: mini-boardgame-server
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
