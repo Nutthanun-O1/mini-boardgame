@@ -471,31 +471,35 @@ export default function Page() {
   }
 
   async function handleSetTimer(duration) {
+    const code = roomCodeRef.current;
     setTimerSetting(duration);
     await getSupabase().from('rooms')
       .update({ timer_duration: duration })
-      .eq('code', roomCode);
+      .eq('code', code);
   }
 
   async function handleSetDifficulty(val) {
+    const code = roomCodeRef.current;
     setDifficulty(val);
     await getSupabase().from('rooms')
       .update({ difficulty: val })
-      .eq('code', roomCode);
+      .eq('code', code);
   }
 
   async function handleSetDmMode(val) {
+    const code = roomCodeRef.current;
     setDmMode(val);
     await getSupabase().from('rooms')
       .update({ dm_mode: val })
-      .eq('code', roomCode);
+      .eq('code', code);
   }
 
   async function handleSetWordPick(val) {
+    const code = roomCodeRef.current;
     setWordPick(val);
     await getSupabase().from('rooms')
       .update({ word_pick: val })
-      .eq('code', roomCode);
+      .eq('code', code);
   }
 
   /**
@@ -514,6 +518,7 @@ export default function Page() {
   }
 
   async function handleStartGame() {
+    const code = roomCodeRef.current;
     const room = roomRef.current;
     if (!room) return;
     const pls = playersRef.current;
@@ -541,7 +546,7 @@ export default function Page() {
         spyfall_votes: {},
         roles,
         result: null,
-      }).eq('code', roomCode);
+      }).eq('code', code);
 
     } else {
       // ─── Insider start ───
@@ -565,11 +570,11 @@ export default function Page() {
         // Remove old DM flag
         await getSupabase().from('players')
           .update({ is_dm: false })
-          .eq('room_code', roomCode).eq('is_dm', true);
+          .eq('room_code', code).eq('is_dm', true);
         // Set new DM
         await getSupabase().from('players')
           .update({ is_dm: true })
-          .eq('room_code', roomCode).eq('id', dmPlayer.id);
+          .eq('room_code', code).eq('id', dmPlayer.id);
       }
 
       if (room.word_pick) {
@@ -583,7 +588,7 @@ export default function Page() {
           insider_name: insiderPlayer.name,
           roles,
           result: null,
-        }).eq('code', roomCode);
+        }).eq('code', code);
       } else {
         // Normal mode: pick word automatically
         const { word: w, category: cat } = pickWord(diff);
@@ -597,7 +602,7 @@ export default function Page() {
           insider_name: insiderPlayer.name,
           roles,
           result: null,
-        }).eq('code', roomCode);
+        }).eq('code', code);
       }
     }
   }
@@ -606,18 +611,20 @@ export default function Page() {
    * DM picks a word during word-pick phase → advance to playing.
    */
   async function handlePickWord({ word: w, category: cat }) {
+    const code = roomCodeRef.current;
     await getSupabase().from('rooms').update({
       phase: 'playing',
       timer_started_at: Date.now(),
       word: w,
       category: cat,
       word_choices: null,
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handleGuessCorrect() {
     const room = roomRef.current;
     if (!room) return;
+    const code = roomCodeRef.current;
     const elapsed = Math.floor((Date.now() - room.timer_started_at) / 1000);
 
     await getSupabase().from('rooms').update({
@@ -627,12 +634,13 @@ export default function Page() {
         word: room.word, category: room.category,
         timeUsed: elapsed,
       },
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handleRevealInsider() {
     const room = roomRef.current;
     if (!room) return;
+    const code = roomCodeRef.current;
     const pls = playersRef.current;
 
     await getSupabase().from('rooms').update({
@@ -642,12 +650,13 @@ export default function Page() {
         insider: room.insider_name, insiderId: room.insider_id,
         players: pls, roles: room.roles,
       },
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handleSpyGuessLocation(locKey) {
     const room = roomRef.current;
     if (!room) return;
+    const code = roomCodeRef.current;
     const pls = playersRef.current;
     const correct = locKey === room.spyfall_location;
 
@@ -664,36 +673,38 @@ export default function Page() {
         guessedLocationKey: locKey,
         players: pls, roles: room.roles,
       },
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handleCallVote(targetId) {
     const pid = myId.current;
+    const code = roomCodeRef.current;
     await getSupabase().from('rooms').update({
       phase: 'spyfall-voting',
       spyfall_vote_active: true,
       spyfall_vote_caller: pid,
       spyfall_vote_target: targetId,
       spyfall_votes: { [pid]: true },
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handleCastVote(agree) {
     const pid = myId.current;
+    const code = roomCodeRef.current;
     const pls = playersRef.current;
 
     // Fetch latest votes to avoid stale data
     const { data: latest } = await getSupabase()
       .from('rooms')
       .select('spyfall_votes, spyfall_vote_target, spy_id, spy_name, spyfall_location, spyfall_location_label, roles')
-      .eq('code', roomCode).single();
+      .eq('code', code).single();
 
     const updatedVotes = { ...(latest.spyfall_votes || {}), [pid]: agree };
 
     // Update votes
     await getSupabase().from('rooms').update({
       spyfall_votes: updatedVotes,
-    }).eq('code', roomCode);
+    }).eq('code', code);
 
     // Check if all players voted → resolve
     if (Object.keys(updatedVotes).length >= pls.length) {
@@ -708,7 +719,7 @@ export default function Page() {
             phase: 'spyfall-last-chance',
             timer_started_at: null,
             spyfall_vote_active: false,
-          }).eq('code', roomCode);
+          }).eq('code', code);
         } else {
           // Wrong accusation → spy wins
           const accusedName = pls.find(p => p.id === latest.spyfall_vote_target)?.name;
@@ -724,7 +735,7 @@ export default function Page() {
               locationKey: latest.spyfall_location,
               players: pls, roles: latest.roles,
             },
-          }).eq('code', roomCode);
+          }).eq('code', code);
         }
       } else {
         // Vote failed → continue playing
@@ -732,7 +743,7 @@ export default function Page() {
           phase: 'playing',
           spyfall_vote_active: false,
           spyfall_votes: {},
-        }).eq('code', roomCode);
+        }).eq('code', code);
       }
     }
   }
@@ -740,6 +751,7 @@ export default function Page() {
   async function handleSpyLastGuess(locKey) {
     const room = roomRef.current;
     if (!room) return;
+    const code = roomCodeRef.current;
     const pls = playersRef.current;
     const correct = locKey === room.spyfall_location;
 
@@ -755,44 +767,62 @@ export default function Page() {
         guessedLocationKey: locKey,
         players: pls, roles: room.roles,
       },
-    }).eq('code', roomCode);
+    }).eq('code', code);
   }
 
   async function handlePlayAgain() {
     const pid = myId.current;
+    const code = roomCodeRef.current;
+    if (!code) { setError('ไม่พบรหัสห้อง'); return; }
 
-    // Reset DM flags in players table — make current user the DM
-    await getSupabase().from('players')
-      .update({ is_dm: false })
-      .eq('room_code', roomCode);
-    await getSupabase().from('players')
-      .update({ is_dm: true })
-      .eq('room_code', roomCode).eq('id', pid);
+    try {
+      // Reset DM flags in players table — make current user the DM
+      await getSupabase().from('players')
+        .update({ is_dm: false })
+        .eq('room_code', code);
+      await getSupabase().from('players')
+        .update({ is_dm: true })
+        .eq('room_code', code).eq('id', pid);
 
-    await getSupabase().from('rooms').update({
-      phase: 'lobby',
-      dm_id: pid,
-      word: null, category: null,
-      roles: {},
-      insider_id: null, insider_name: null,
-      timer_started_at: null,
-      spy_id: null, spy_name: null,
-      spyfall_location: null, spyfall_location_label: null,
-      spyfall_vote_active: false,
-      spyfall_vote_caller: null, spyfall_vote_target: null,
-      spyfall_votes: {},
-      word_choices: null,
-      result: null,
-    }).eq('code', roomCode);
+      const { error: updateErr } = await getSupabase().from('rooms').update({
+        phase: 'lobby',
+        dm_id: pid,
+        word: null, category: null,
+        roles: {},
+        insider_id: null, insider_name: null,
+        timer_started_at: null,
+        spy_id: null, spy_name: null,
+        spyfall_location: null, spyfall_location_label: null,
+        spyfall_vote_active: false,
+        spyfall_vote_caller: null, spyfall_vote_target: null,
+        spyfall_votes: {},
+        word_choices: null,
+        result: null,
+      }).eq('code', code);
+
+      if (updateErr) {
+        console.error('handlePlayAgain room update error:', updateErr);
+        setError('ไม่สามารถเริ่มเกมใหม่ได้: ' + updateErr.message);
+        return;
+      }
+
+      // Force re-fetch to catch up in case Realtime missed the update
+      await fetchRoom(code);
+      await fetchPlayers(code);
+    } catch (err) {
+      console.error('handlePlayAgain error:', err);
+      setError('เกิดข้อผิดพลาด: ' + (err.message || 'ลองอีกครั้ง'));
+    }
   }
 
   async function handleLeaveRoom() {
     const pid = myId.current;
+    const code = roomCodeRef.current;
     if (isDM) {
-      await getSupabase().from('rooms').delete().eq('code', roomCode);
+      await getSupabase().from('rooms').delete().eq('code', code);
     } else {
       await getSupabase().from('players').delete()
-        .eq('id', pid).eq('room_code', roomCode);
+        .eq('id', pid).eq('room_code', code);
     }
     doResetAll();
   }
