@@ -1,13 +1,5 @@
-'use client';
-
-import { io } from 'socket.io-client';
-
-const URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
-
-export const socket = io(URL, {
-  transports: ['websocket', 'polling'],
-  autoConnect: true,
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-});
+// ══════════════════════════════════════════════
+//  DEPRECATED — This file is no longer used.
+//  The project has migrated from socket.io to Supabase.
+//  See src/lib/supabase.js and src/lib/gameData.js
+// ══════════════════════════════════════════════

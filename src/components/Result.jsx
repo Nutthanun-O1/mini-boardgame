@@ -5,7 +5,7 @@ import { ROLE_IMAGES } from '@/lib/images';
 
 export default function Result({ result, word, category, isDM, myRole, onPlayAgain }) {
   const isTimedOut = result?.timedOut;
-  const gamePlayers = result?.gamePlayers || [];
+  const gamePlayers = result?.players || result?.gamePlayers || [];
   const roles = result?.roles || {};
 
   const ROLE_BADGE = {

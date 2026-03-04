@@ -1,13 +1,18 @@
-# Render Blueprint — deploy server.js as a Web Service
+# Render Blueprint — deploy Next.js frontend only
+# Server.js is no longer needed (migrated to Supabase)
 # https://render.com/docs/blueprint-spec
 
 services:
   - type: web
-    name: mini-boardgame-server
+    name: mini-boardgame
     runtime: node
     plan: free
-    buildCommand: npm install --omit=dev
-    startCommand: node server.js
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false

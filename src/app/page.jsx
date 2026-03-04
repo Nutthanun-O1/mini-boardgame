@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { socket } from '@/lib/socket';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { getSupabase, getPlayerId } from '@/lib/supabase';
+import {
+  generateRoomCode, pickWord, pickSpyfallLocation,
+  ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
+} from '@/lib/gameData';
 import GameSelect from '@/components/GameSelect';
 import Home from '@/components/Home';
 import Lobby from '@/components/Lobby';
@@ -14,6 +18,7 @@ import SpyfallLastChance from '@/components/SpyfallLastChance';
 import SpyfallResult from '@/components/SpyfallResult';
 
 export default function Page() {
+  // ── State ──
   const [phase, setPhase] = useState('gameSelect');
   const [gameId, setGameId] = useState(null);
   const [roomCode, setRoomCode] = useState('');
@@ -24,6 +29,7 @@ export default function Page() {
   const [word, setWord] = useState(null);
   const [category, setCategory] = useState(null);
   const [timerTotal, setTimerTotal] = useState(300);
+  const [timerStartedAt, setTimerStartedAt] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(300);
   const [timerSetting, setTimerSetting] = useState(300);
   const [result, setResult] = useState(null);
@@ -36,107 +42,287 @@ export default function Page() {
   const [spyfallVoteInfo, setSpyfallVoteInfo] = useState(null);
   const [spyfallLastChance, setSpyfallLastChance] = useState(null);
 
-  useEffect(() => {
-    socket.on('room-joined', (data) => {
-      setRoomCode(data.code);
-      setGameId(data.gameId);
-      setIsDM(data.isDM);
-      setPlayers(data.players);
-      setTimerSetting(data.timerDuration);
-      setPhase('lobby');
-      setError('');
-    });
+  // ── Refs (for latest values inside intervals / callbacks) ──
+  const myId = useRef(null);
+  const roomRef = useRef(null);
+  const playersRef = useRef([]);
+  const roomCodeRef = useRef('');
+  const isDMRef = useRef(false);
+  const channelRef = useRef(null);
+  const timerIntervalRef = useRef(null);
+  const timeUpFiredRef = useRef(false);
 
-    socket.on('players-updated', setPlayers);
-    socket.on('timer-setting', setTimerSetting);
+  // Keep refs in sync
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
+  useEffect(() => { isDMRef.current = isDM; }, [isDM]);
 
-    socket.on('game-started', (data) => {
-      setMyRole(data.role);
-      setTimerTotal(data.timerTotal);
-      setTimeRemaining(data.timerTotal);
-      setPhase('playing');
+  // ── Init player ID ──
+  useEffect(() => { myId.current = getPlayerId(); }, []);
 
-      if (data.gameId === 'spyfall') {
-        setSpyfallLocation(data.location);
-        setSpyfallLocationKey(data.locationKey);
-        setSpyfallLocations(data.locations || []);
-      } else {
-        setCategory(data.category);
-        setWord(data.word);
-      }
-    });
+  // ══════════════════════════════════════════════
+  //  Fetch helpers
+  // ══════════════════════════════════════════════
+  const fetchPlayers = useCallback(async (code) => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from('players')
+      .select('*')
+      .eq('room_code', code)
+      .order('created_at', { ascending: true });
 
-    socket.on('timer-tick', setTimeRemaining);
-
-    // ── Insider events ──
-    socket.on('word-revealed', (data) => {
-      setWord(data.word);
-      setCategory(data.category);
-      setResult({ timeUsed: data.timeUsed });
-      setPhase('discussion');
-    });
-
-    socket.on('time-up', (data) => {
-      setResult({ ...data, timedOut: true });
-      setPhase('result');
-    });
-
-    socket.on('insider-revealed', (data) => {
-      setResult(data);
-      setPhase('result');
-    });
-
-    // ── Spyfall events ──
-    socket.on('vote-started', (data) => {
-      setSpyfallVoteInfo(data);
-      setPhase('spyfall-voting');
-    });
-
-    socket.on('vote-update', (data) => {
-      setSpyfallVoteInfo(prev => prev ? { ...prev, votes: data.votes, totalPlayers: data.totalPlayers } : prev);
-    });
-
-    socket.on('vote-failed', (data) => {
-      setSpyfallVoteInfo(null);
-      setPhase('playing');
-    });
-
-    socket.on('spy-caught', (data) => {
-      setSpyfallLastChance(data);
-      setPhase('spyfall-last-chance');
-    });
-
-    socket.on('spyfall-result', (data) => {
-      setResult(data);
-      setPhase('spyfall-result');
-    });
-
-    // ── Common events ──
-    socket.on('back-to-lobby', (p) => {
-      setPlayers(p);
-      setMyRole(null);
-      setWord(null);
-      setCategory(null);
-      setResult(null);
-      setSpyfallLocation(null);
-      setSpyfallLocationKey(null);
-      setSpyfallLocations([]);
-      setSpyfallVoteInfo(null);
-      setSpyfallLastChance(null);
-      setPhase('lobby');
-    });
-
-    socket.on('room-closed', () => {
-      alert('DM ออกจากห้องแล้ว');
-      resetAll();
-    });
-
-    socket.on('error-msg', setError);
-
-    return () => socket.removeAllListeners();
+    const mapped = (data || []).map(p => ({
+      id: p.id, name: p.name, isDM: p.is_dm,
+    }));
+    setPlayers(mapped);
+    playersRef.current = mapped;
   }, []);
 
-  function resetAll() {
+  const fetchRoom = useCallback(async (code) => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('code', code)
+      .maybeSingle();
+    if (data) {
+      roomRef.current = data;
+      processRoomData(data);
+    }
+  }, []);
+
+  // ══════════════════════════════════════════════
+  //  Process room data from Realtime / initial fetch
+  // ══════════════════════════════════════════════
+  const processRoomData = useCallback((room) => {
+    if (!room) return;
+    roomRef.current = room;
+    const pid = myId.current;
+    const role = room.roles?.[pid];
+
+    setGameId(room.game_id);
+    setTimerSetting(room.timer_duration);
+    if (role) setMyRole(role);
+
+    switch (room.phase) {
+      case 'lobby':
+        setPhase('lobby');
+        setMyRole(null);
+        setWord(null);
+        setCategory(null);
+        setResult(null);
+        setTimerStartedAt(null);
+        timeUpFiredRef.current = false;
+        setSpyfallLocation(null);
+        setSpyfallLocationKey(null);
+        setSpyfallLocations([]);
+        setSpyfallVoteInfo(null);
+        setSpyfallLastChance(null);
+        break;
+
+      case 'playing':
+        setPhase('playing');
+        setTimerTotal(room.timer_duration);
+        setTimerStartedAt(room.timer_started_at);
+        timeUpFiredRef.current = false;
+        setSpyfallVoteInfo(null);
+
+        if (room.game_id === 'spyfall') {
+          const isSpy = pid === room.spy_id;
+          setSpyfallLocation(isSpy ? null : room.spyfall_location_label);
+          setSpyfallLocationKey(isSpy ? null : room.spyfall_location);
+          setSpyfallLocations(ALL_SPYFALL_LOCATIONS);
+        } else {
+          setCategory(room.category);
+          const canSee = role === 'Master' || role === 'Insider';
+          setWord(canSee ? room.word : null);
+        }
+        break;
+
+      case 'discussion':
+        setPhase('discussion');
+        setWord(room.word);
+        setCategory(room.category);
+        setTimerStartedAt(null);
+        setResult(room.result);
+        break;
+
+      case 'result':
+        setPhase('result');
+        setTimerStartedAt(null);
+        setResult(room.result);
+        break;
+
+      case 'spyfall-voting':
+        setPhase('spyfall-voting');
+        setSpyfallVoteInfo({
+          callerId: room.spyfall_vote_caller,
+          targetId: room.spyfall_vote_target,
+          votes: room.spyfall_votes || {},
+          totalPlayers: playersRef.current.length,
+        });
+        break;
+
+      case 'spyfall-last-chance':
+        setPhase('spyfall-last-chance');
+        setTimerStartedAt(null);
+        setSpyfallLastChance({
+          spy: room.spy_name,
+          spyId: room.spy_id,
+          locations: ALL_SPYFALL_LOCATIONS,
+        });
+        break;
+
+      case 'spyfall-result':
+        setPhase('spyfall-result');
+        setTimerStartedAt(null);
+        setResult(room.result);
+        break;
+    }
+  }, []);
+
+  // ══════════════════════════════════════════════
+  //  Realtime subscription
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    if (!roomCode) return;
+
+    const channel = getSupabase()
+      .channel(`room-${roomCode}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'rooms',
+        filter: `code=eq.${roomCode}`,
+      }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          alert('DM ออกจากห้องแล้ว');
+          doResetAll();
+          return;
+        }
+        processRoomData(payload.new);
+      })
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'players',
+        filter: `room_code=eq.${roomCode}`,
+      }, () => {
+        fetchPlayers(roomCode);
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    // Initial data fetch
+    fetchRoom(roomCode);
+    fetchPlayers(roomCode);
+
+    return () => {
+      getSupabase().removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [roomCode, fetchPlayers, fetchRoom, processRoomData]);
+
+  // ══════════════════════════════════════════════
+  //  Client-side timer
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    if (!timerStartedAt) return;
+
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
+      const remaining = Math.max(0, timerTotal - elapsed);
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0 && !timeUpFiredRef.current) {
+        timeUpFiredRef.current = true;
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+        // Only the DM triggers the time-up DB update
+        if (isDMRef.current) {
+          triggerTimeUp();
+        }
+      }
+    };
+
+    tick();
+    timerIntervalRef.current = setInterval(tick, 250);
+
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+  }, [timerStartedAt, timerTotal]);
+
+  // ══════════════════════════════════════════════
+  //  Cleanup on page unload (best effort)
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    const cleanup = () => {
+      const pid = myId.current;
+      const code = roomCodeRef.current;
+      if (!pid || !code) return;
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!url || !key) return;
+
+      // Use fetch with keepalive to survive page close
+      if (isDMRef.current) {
+        fetch(`${url}/rest/v1/rooms?code=eq.${code}`, {
+          method: 'DELETE', keepalive: true,
+          headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+        });
+      } else {
+        fetch(`${url}/rest/v1/players?id=eq.${pid}&room_code=eq.${code}`, {
+          method: 'DELETE', keepalive: true,
+          headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+        });
+      }
+    };
+    window.addEventListener('beforeunload', cleanup);
+    return () => window.removeEventListener('beforeunload', cleanup);
+  }, []);
+
+  // ══════════════════════════════════════════════
+  //  Game action handlers
+  // ══════════════════════════════════════════════
+
+  async function triggerTimeUp() {
+    const room = roomRef.current;
+    if (!room || room.phase !== 'playing') return;
+    const pls = playersRef.current;
+    const code = roomCodeRef.current;
+
+    if (room.game_id === 'spyfall') {
+      await getSupabase().from('rooms').update({
+        phase: 'spyfall-result',
+        timer_started_at: null,
+        result: {
+          winner: 'spy', reason: 'timeout',
+          spy: room.spy_name, spyId: room.spy_id,
+          location: room.spyfall_location_label,
+          locationKey: room.spyfall_location,
+          players: pls, roles: room.roles,
+        },
+      }).eq('code', code).eq('phase', 'playing');
+    } else {
+      await getSupabase().from('rooms').update({
+        phase: 'result',
+        timer_started_at: null,
+        result: {
+          word: room.word, category: room.category,
+          insider: room.insider_name, insiderId: room.insider_id,
+          timedOut: true, players: pls, roles: room.roles,
+        },
+      }).eq('code', code).eq('phase', 'playing');
+    }
+  }
+
+  function doResetAll() {
     setPhase('gameSelect');
     setGameId(null);
     setRoomCode('');
@@ -147,7 +333,9 @@ export default function Page() {
     setWord(null);
     setCategory(null);
     setTimerTotal(300);
+    setTimerStartedAt(null);
     setTimeRemaining(300);
+    setTimerSetting(300);
     setResult(null);
     setError('');
     setSpyfallLocation(null);
@@ -155,6 +343,8 @@ export default function Page() {
     setSpyfallLocations([]);
     setSpyfallVoteInfo(null);
     setSpyfallLastChance(null);
+    roomRef.current = null;
+    timeUpFiredRef.current = false;
   }
 
   function handleSelectGame(id) {
@@ -162,30 +352,325 @@ export default function Page() {
     setPhase('home');
   }
 
-  function handleCreateRoom(name, duration) {
-    setPlayerName(name);
-    socket.emit('create-room', { name, gameId, timerDuration: duration });
+  async function handleCreateRoom(name, duration) {
+    try {
+      setError('');
+      const pid = myId.current;
+      const code = await generateRoomCode();
+
+      const { error: roomErr } = await getSupabase().from('rooms').insert({
+        code,
+        game_id: gameId || 'insider',
+        dm_id: pid,
+        phase: 'lobby',
+        timer_duration: duration || 300,
+      });
+      if (roomErr) throw roomErr;
+
+      const { error: playerErr } = await getSupabase().from('players').insert({
+        id: pid, room_code: code, name, is_dm: true,
+      });
+      if (playerErr) throw playerErr;
+
+      setPlayerName(name);
+      setIsDM(true);
+      setTimerSetting(duration || 300);
+      setRoomCode(code); // triggers realtime subscription
+      setPhase('lobby');
+    } catch (err) {
+      setError(err.message || 'เกิดข้อผิดพลาด');
+    }
   }
 
-  function handleJoinRoom(code, name) {
-    setPlayerName(name);
-    socket.emit('join-room', { code, name });
+  async function handleJoinRoom(code, name) {
+    try {
+      setError('');
+      code = (code || '').toUpperCase().trim();
+      const pid = myId.current;
+
+      const { data: room, error: fetchErr } = await getSupabase()
+        .from('rooms').select('*').eq('code', code).maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!room) { setError('ไม่พบห้องนี้'); return; }
+      if (room.phase !== 'lobby') { setError('เกมเริ่มไปแล้ว'); return; }
+
+      const { data: existing } = await getSupabase()
+        .from('players').select('name').eq('room_code', code).eq('name', name);
+      if (existing && existing.length > 0) { setError('ชื่อนี้ถูกใช้แล้ว'); return; }
+
+      const { error: playerErr } = await getSupabase().from('players').insert({
+        id: pid, room_code: code, name, is_dm: false,
+      });
+      if (playerErr) throw playerErr;
+
+      setPlayerName(name);
+      setIsDM(false);
+      setGameId(room.game_id);
+      setTimerSetting(room.timer_duration);
+      setRoomCode(code); // triggers realtime subscription
+      setPhase('lobby');
+    } catch (err) {
+      setError(err.message || 'เกิดข้อผิดพลาด');
+    }
   }
 
-  function handleSetTimer(d) {
-    setTimerSetting(d);
-    socket.emit('set-timer', d);
+  async function handleSetTimer(duration) {
+    setTimerSetting(duration);
+    await getSupabase().from('rooms')
+      .update({ timer_duration: duration })
+      .eq('code', roomCode);
   }
 
+  async function handleStartGame() {
+    const room = roomRef.current;
+    if (!room) return;
+    const pls = playersRef.current;
+
+    if (room.game_id === 'spyfall') {
+      // ─── Spyfall start ───
+      if (pls.length < 3) { setError('ต้องมีผู้เล่นอย่างน้อย 3 คน'); return; }
+
+      const { locationKey, locationLabel } = pickSpyfallLocation();
+      const spyIdx = Math.floor(Math.random() * pls.length);
+      const spyPlayer = pls[spyIdx];
+      const roles = {};
+      pls.forEach(p => { roles[p.id] = p.id === spyPlayer.id ? 'Spy' : 'Agent'; });
+
+      await getSupabase().from('rooms').update({
+        phase: 'playing',
+        timer_started_at: Date.now(),
+        spy_id: spyPlayer.id,
+        spy_name: spyPlayer.name,
+        spyfall_location: locationKey,
+        spyfall_location_label: locationLabel,
+        spyfall_vote_active: false,
+        spyfall_vote_caller: null,
+        spyfall_vote_target: null,
+        spyfall_votes: {},
+        roles,
+        result: null,
+      }).eq('code', roomCode);
+
+    } else {
+      // ─── Insider start ───
+      if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
+
+      const { word: w, category: cat } = pickWord();
+      const dmPlayer = pls.find(p => p.isDM);
+      const nonDM = pls.filter(p => !p.isDM);
+      const insiderIdx = Math.floor(Math.random() * nonDM.length);
+      const insiderPlayer = nonDM[insiderIdx];
+
+      const roles = {};
+      pls.forEach(p => {
+        if (p.id === dmPlayer?.id) roles[p.id] = 'Master';
+        else if (p.id === insiderPlayer.id) roles[p.id] = 'Insider';
+        else roles[p.id] = 'Common';
+      });
+
+      await getSupabase().from('rooms').update({
+        phase: 'playing',
+        timer_started_at: Date.now(),
+        word: w,
+        category: cat,
+        insider_id: insiderPlayer.id,
+        insider_name: insiderPlayer.name,
+        roles,
+        result: null,
+      }).eq('code', roomCode);
+    }
+  }
+
+  async function handleGuessCorrect() {
+    const room = roomRef.current;
+    if (!room) return;
+    const elapsed = Math.floor((Date.now() - room.timer_started_at) / 1000);
+
+    await getSupabase().from('rooms').update({
+      phase: 'discussion',
+      timer_started_at: null,
+      result: {
+        word: room.word, category: room.category,
+        timeUsed: elapsed,
+      },
+    }).eq('code', roomCode);
+  }
+
+  async function handleRevealInsider() {
+    const room = roomRef.current;
+    if (!room) return;
+    const pls = playersRef.current;
+
+    await getSupabase().from('rooms').update({
+      phase: 'result',
+      result: {
+        word: room.word, category: room.category,
+        insider: room.insider_name, insiderId: room.insider_id,
+        players: pls, roles: room.roles,
+      },
+    }).eq('code', roomCode);
+  }
+
+  async function handleSpyGuessLocation(locKey) {
+    const room = roomRef.current;
+    if (!room) return;
+    const pls = playersRef.current;
+    const correct = locKey === room.spyfall_location;
+
+    await getSupabase().from('rooms').update({
+      phase: 'spyfall-result',
+      timer_started_at: null,
+      result: {
+        winner: correct ? 'spy' : 'players',
+        reason: correct ? 'spy-guessed-correct' : 'spy-guessed-wrong',
+        spy: room.spy_name, spyId: room.spy_id,
+        location: room.spyfall_location_label,
+        locationKey: room.spyfall_location,
+        guessedLocation: spyfallLocMap[locKey] || locKey,
+        guessedLocationKey: locKey,
+        players: pls, roles: room.roles,
+      },
+    }).eq('code', roomCode);
+  }
+
+  async function handleCallVote(targetId) {
+    const pid = myId.current;
+    await getSupabase().from('rooms').update({
+      phase: 'spyfall-voting',
+      spyfall_vote_active: true,
+      spyfall_vote_caller: pid,
+      spyfall_vote_target: targetId,
+      spyfall_votes: { [pid]: true },
+    }).eq('code', roomCode);
+  }
+
+  async function handleCastVote(agree) {
+    const pid = myId.current;
+    const pls = playersRef.current;
+
+    // Fetch latest votes to avoid stale data
+    const { data: latest } = await getSupabase()
+      .from('rooms')
+      .select('spyfall_votes, spyfall_vote_target, spy_id, spy_name, spyfall_location, spyfall_location_label, roles')
+      .eq('code', roomCode).single();
+
+    const updatedVotes = { ...(latest.spyfall_votes || {}), [pid]: agree };
+
+    // Update votes
+    await getSupabase().from('rooms').update({
+      spyfall_votes: updatedVotes,
+    }).eq('code', roomCode);
+
+    // Check if all players voted → resolve
+    if (Object.keys(updatedVotes).length >= pls.length) {
+      const yesCount = Object.values(updatedVotes).filter(Boolean).length;
+      const majority = yesCount > pls.length / 2;
+
+      if (majority) {
+        const targetIsSpy = latest.spyfall_vote_target === latest.spy_id;
+        if (targetIsSpy) {
+          // Spy caught → last chance to guess
+          await getSupabase().from('rooms').update({
+            phase: 'spyfall-last-chance',
+            timer_started_at: null,
+            spyfall_vote_active: false,
+          }).eq('code', roomCode);
+        } else {
+          // Wrong accusation → spy wins
+          const accusedName = pls.find(p => p.id === latest.spyfall_vote_target)?.name;
+          await getSupabase().from('rooms').update({
+            phase: 'spyfall-result',
+            timer_started_at: null,
+            spyfall_vote_active: false,
+            result: {
+              winner: 'spy', reason: 'wrong-accusation',
+              accusedId: latest.spyfall_vote_target, accusedName,
+              spy: latest.spy_name, spyId: latest.spy_id,
+              location: latest.spyfall_location_label,
+              locationKey: latest.spyfall_location,
+              players: pls, roles: latest.roles,
+            },
+          }).eq('code', roomCode);
+        }
+      } else {
+        // Vote failed → continue playing
+        await getSupabase().from('rooms').update({
+          phase: 'playing',
+          spyfall_vote_active: false,
+          spyfall_votes: {},
+        }).eq('code', roomCode);
+      }
+    }
+  }
+
+  async function handleSpyLastGuess(locKey) {
+    const room = roomRef.current;
+    if (!room) return;
+    const pls = playersRef.current;
+    const correct = locKey === room.spyfall_location;
+
+    await getSupabase().from('rooms').update({
+      phase: 'spyfall-result',
+      result: {
+        winner: correct ? 'spy' : 'players',
+        reason: correct ? 'spy-last-guess-correct' : 'spy-caught',
+        spy: room.spy_name, spyId: room.spy_id,
+        location: room.spyfall_location_label,
+        locationKey: room.spyfall_location,
+        guessedLocation: spyfallLocMap[locKey] || locKey,
+        guessedLocationKey: locKey,
+        players: pls, roles: room.roles,
+      },
+    }).eq('code', roomCode);
+  }
+
+  async function handlePlayAgain() {
+    await getSupabase().from('rooms').update({
+      phase: 'lobby',
+      word: null, category: null,
+      roles: {},
+      insider_id: null, insider_name: null,
+      timer_started_at: null,
+      spy_id: null, spy_name: null,
+      spyfall_location: null, spyfall_location_label: null,
+      spyfall_vote_active: false,
+      spyfall_vote_caller: null, spyfall_vote_target: null,
+      spyfall_votes: {},
+      result: null,
+    }).eq('code', roomCode);
+  }
+
+  async function handleLeaveRoom() {
+    const pid = myId.current;
+    if (isDM) {
+      await getSupabase().from('rooms').delete().eq('code', roomCode);
+    } else {
+      await getSupabase().from('players').delete()
+        .eq('id', pid).eq('room_code', roomCode);
+    }
+    doResetAll();
+  }
+
+  // ══════════════════════════════════════════════
+  //  Render
+  // ══════════════════════════════════════════════
   const isSpyfall = gameId === 'spyfall';
   const shared = { isDM, players, word, category, error, roomCode, playerName };
+
+  // Compute vote info with player names
+  const computedVoteInfo = spyfallVoteInfo ? {
+    ...spyfallVoteInfo,
+    callerName: players.find(p => p.id === spyfallVoteInfo.callerId)?.name || '???',
+    targetName: players.find(p => p.id === spyfallVoteInfo.targetId)?.name || '???',
+    totalPlayers: players.length,
+  } : null;
 
   return (
     <div className="app">
       <header className="header">
         <div className="header-left">
           {phase !== 'gameSelect' && (
-            <button className="header-back" onClick={resetAll}>
+            <button className="header-back" onClick={handleLeaveRoom}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                 <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
@@ -214,7 +699,7 @@ export default function Page() {
             {...shared}
             timerSetting={timerSetting}
             onSetTimer={handleSetTimer}
-            onStartGame={() => socket.emit('start-game')}
+            onStartGame={handleStartGame}
           />
         )}
 
@@ -225,14 +710,14 @@ export default function Page() {
             role={myRole}
             timerTotal={timerTotal}
             timeRemaining={timeRemaining}
-            onGuessCorrect={() => socket.emit('guess-correct')}
+            onGuessCorrect={handleGuessCorrect}
           />
         )}
         {phase === 'discussion' && (
           <Discussion
             {...shared}
             result={result}
-            onRevealInsider={() => socket.emit('reveal-insider')}
+            onRevealInsider={handleRevealInsider}
           />
         )}
         {phase === 'result' && !isSpyfall && (
@@ -240,7 +725,7 @@ export default function Page() {
             {...shared}
             result={result}
             myRole={myRole}
-            onPlayAgain={() => socket.emit('play-again')}
+            onPlayAgain={handlePlayAgain}
           />
         )}
 
@@ -254,17 +739,17 @@ export default function Page() {
             timerTotal={timerTotal}
             timeRemaining={timeRemaining}
             players={players}
-            myId={socket.id}
-            onCallVote={(targetId) => socket.emit('call-vote', { targetId })}
-            onSpyGuess={(locationKey) => socket.emit('spy-guess-location', { locationKey })}
+            myId={myId.current}
+            onCallVote={handleCallVote}
+            onSpyGuess={handleSpyGuessLocation}
           />
         )}
         {phase === 'spyfall-voting' && (
           <SpyfallVoting
-            voteInfo={spyfallVoteInfo}
+            voteInfo={computedVoteInfo}
             players={players}
-            myId={socket.id}
-            onCastVote={(agree) => socket.emit('cast-vote', { agree })}
+            myId={myId.current}
+            onCastVote={handleCastVote}
           />
         )}
         {phase === 'spyfall-last-chance' && (
@@ -272,7 +757,7 @@ export default function Page() {
             spy={spyfallLastChance?.spy}
             locations={spyfallLastChance?.locations || spyfallLocations}
             isSpy={myRole === 'Spy'}
-            onLastGuess={(locationKey) => socket.emit('spy-last-guess', { locationKey })}
+            onLastGuess={handleSpyLastGuess}
           />
         )}
         {phase === 'spyfall-result' && (
@@ -280,7 +765,7 @@ export default function Page() {
             result={result}
             isDM={isDM}
             myRole={myRole}
-            onPlayAgain={() => socket.emit('play-again')}
+            onPlayAgain={handlePlayAgain}
           />
         )}
       </main>
