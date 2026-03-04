@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getSupabase, getPlayerId } from '@/lib/supabase';
+import { AnimatePresence } from 'framer-motion';
+import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSession } from '@/lib/supabase';
 import {
   generateRoomCode, pickWord, pickWordChoices, pickSpyfallLocation,
   ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
@@ -106,6 +107,11 @@ export default function Page() {
     roomRef.current = room;
     const pid = myId.current;
     const role = room.roles?.[pid];
+
+    // ── Always sync isDM from room's dm_id ──
+    const amIDM = room.dm_id === pid;
+    setIsDM(amIDM);
+    isDMRef.current = amIDM;
 
     setGameId(room.game_id);
     setTimerSetting(room.timer_duration);
@@ -275,32 +281,52 @@ export default function Page() {
   }, [timerStartedAt, timerTotal]);
 
   // ══════════════════════════════════════════════
-  //  Cleanup on page unload (best effort)
+  //  Visibility change — re-fetch room state when user comes back
   // ══════════════════════════════════════════════
   useEffect(() => {
-    const cleanup = () => {
-      const pid = myId.current;
-      const code = roomCodeRef.current;
-      if (!pid || !code) return;
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!url || !key) return;
-
-      // Use fetch with keepalive to survive page close
-      if (isDMRef.current) {
-        fetch(`${url}/rest/v1/rooms?code=eq.${code}`, {
-          method: 'DELETE', keepalive: true,
-          headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-        });
-      } else {
-        fetch(`${url}/rest/v1/players?id=eq.${pid}&room_code=eq.${code}`, {
-          method: 'DELETE', keepalive: true,
-          headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-        });
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && roomCodeRef.current) {
+        // Re-fetch latest room and player data to recover from missed events
+        fetchRoom(roomCodeRef.current);
+        fetchPlayers(roomCodeRef.current);
       }
     };
-    window.addEventListener('beforeunload', cleanup);
-    return () => window.removeEventListener('beforeunload', cleanup);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchRoom, fetchPlayers]);
+
+  // ══════════════════════════════════════════════
+  //  Auto-rejoin room after page refresh / screen-lock
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    const session = loadRoomSession();
+    if (!session) return;
+
+    const pid = myId.current;
+    const tryRejoin = async () => {
+      try {
+        const supabase = getSupabase();
+        // Check room still exists
+        const { data: room } = await supabase
+          .from('rooms').select('*').eq('code', session.roomCode).maybeSingle();
+        if (!room) { clearRoomSession(); return; }
+
+        // Check player still exists in room
+        const { data: player } = await supabase
+          .from('players').select('*')
+          .eq('room_code', session.roomCode).eq('id', pid).maybeSingle();
+        if (!player) { clearRoomSession(); return; }
+
+        // Rejoin
+        setPlayerName(session.playerName);
+        setGameId(room.game_id);
+        setTimerSetting(room.timer_duration);
+        setRoomCode(session.roomCode); // triggers subscription
+      } catch {
+        clearRoomSession();
+      }
+    };
+    tryRejoin();
   }, []);
 
   // ══════════════════════════════════════════════
@@ -362,6 +388,7 @@ export default function Page() {
     setWordChoices(null);
     roomRef.current = null;
     timeUpFiredRef.current = false;
+    clearRoomSession();
   }
 
   function handleSelectGame(id) {
@@ -391,9 +418,11 @@ export default function Page() {
 
       setPlayerName(name);
       setIsDM(true);
+      isDMRef.current = true;
       setTimerSetting(duration || 300);
       setRoomCode(code); // triggers realtime subscription
       setPhase('lobby');
+      saveRoomSession({ roomCode: code, playerName: name });
     } catch (err) {
       setError(err.message || 'เกิดข้อผิดพลาด');
     }
@@ -411,21 +440,31 @@ export default function Page() {
       if (!room) { setError('ไม่พบห้องนี้'); return; }
       if (room.phase !== 'lobby') { setError('เกมเริ่มไปแล้ว'); return; }
 
-      const { data: existing } = await getSupabase()
-        .from('players').select('name').eq('room_code', code).eq('name', name);
-      if (existing && existing.length > 0) { setError('ชื่อนี้ถูกใช้แล้ว'); return; }
+      // Check if this player already exists in the room (rejoin scenario)
+      const { data: selfExisting } = await getSupabase()
+        .from('players').select('*')
+        .eq('room_code', code).eq('id', pid).maybeSingle();
 
-      const { error: playerErr } = await getSupabase().from('players').insert({
-        id: pid, room_code: code, name, is_dm: false,
-      });
-      if (playerErr) throw playerErr;
+      if (!selfExisting) {
+        // Check for name collision with other players
+        const { data: nameExists } = await getSupabase()
+          .from('players').select('name').eq('room_code', code).eq('name', name);
+        if (nameExists && nameExists.length > 0) { setError('ชื่อนี้ถูกใช้แล้ว'); return; }
+
+        const { error: playerErr } = await getSupabase().from('players').insert({
+          id: pid, room_code: code, name, is_dm: false,
+        });
+        if (playerErr) throw playerErr;
+      }
 
       setPlayerName(name);
       setIsDM(false);
+      isDMRef.current = false;
       setGameId(room.game_id);
       setTimerSetting(room.timer_duration);
       setRoomCode(code); // triggers realtime subscription
       setPhase('lobby');
+      saveRoomSession({ roomCode: code, playerName: name });
     } catch (err) {
       setError(err.message || 'เกิดข้อผิดพลาด');
     }
@@ -720,8 +759,19 @@ export default function Page() {
   }
 
   async function handlePlayAgain() {
+    const pid = myId.current;
+
+    // Reset DM flags in players table — make current user the DM
+    await getSupabase().from('players')
+      .update({ is_dm: false })
+      .eq('room_code', roomCode);
+    await getSupabase().from('players')
+      .update({ is_dm: true })
+      .eq('room_code', roomCode).eq('id', pid);
+
     await getSupabase().from('rooms').update({
       phase: 'lobby',
+      dm_id: pid,
       word: null, category: null,
       roles: {},
       insider_id: null, insider_name: null,
@@ -778,11 +828,13 @@ export default function Page() {
       </header>
 
       <main className="main">
+        <AnimatePresence mode="wait">
         {phase === 'gameSelect' && (
-          <GameSelect onSelect={handleSelectGame} />
+          <GameSelect key="gameSelect" onSelect={handleSelectGame} />
         )}
         {phase === 'home' && (
           <Home
+            key="home"
             gameId={gameId}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
@@ -792,6 +844,7 @@ export default function Page() {
         )}
         {phase === 'lobby' && (
           <Lobby
+            key="lobby"
             {...shared}
             gameId={gameId}
             timerSetting={timerSetting}
@@ -809,6 +862,7 @@ export default function Page() {
         {/* ── Word-pick phase (Insider only) ── */}
         {phase === 'word-pick' && (
           <WordPick
+            key="word-pick"
             isDM={isDM}
             choices={wordChoices}
             onPickWord={handlePickWord}
@@ -818,6 +872,7 @@ export default function Page() {
         {/* ── Insider phases ── */}
         {phase === 'playing' && !isSpyfall && (
           <Playing
+            key="playing"
             {...shared}
             role={myRole}
             timerTotal={timerTotal}
@@ -827,6 +882,7 @@ export default function Page() {
         )}
         {phase === 'discussion' && (
           <Discussion
+            key="discussion"
             {...shared}
             result={result}
             onRevealInsider={handleRevealInsider}
@@ -834,6 +890,7 @@ export default function Page() {
         )}
         {phase === 'result' && !isSpyfall && (
           <Result
+            key="result"
             {...shared}
             result={result}
             myRole={myRole}
@@ -844,6 +901,7 @@ export default function Page() {
         {/* ── Spyfall phases ── */}
         {phase === 'playing' && isSpyfall && (
           <SpyfallPlaying
+            key="spyfall-playing"
             role={myRole}
             location={spyfallLocation}
             locationKey={spyfallLocationKey}
@@ -858,6 +916,7 @@ export default function Page() {
         )}
         {phase === 'spyfall-voting' && (
           <SpyfallVoting
+            key="spyfall-voting"
             voteInfo={computedVoteInfo}
             players={players}
             myId={myId.current}
@@ -866,6 +925,7 @@ export default function Page() {
         )}
         {phase === 'spyfall-last-chance' && (
           <SpyfallLastChance
+            key="spyfall-last-chance"
             spy={spyfallLastChance?.spy}
             locations={spyfallLastChance?.locations || spyfallLocations}
             isSpy={myRole === 'Spy'}
@@ -874,12 +934,14 @@ export default function Page() {
         )}
         {phase === 'spyfall-result' && (
           <SpyfallResult
+            key="spyfall-result"
             result={result}
             isDM={isDM}
             myRole={myRole}
             onPlayAgain={handlePlayAgain}
           />
         )}
+        </AnimatePresence>
       </main>
     </div>
   );

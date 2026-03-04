@@ -1,5 +1,8 @@
 'use client';
 
+import { motion } from 'framer-motion';
+import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
+
 export default function Lobby({
   roomCode, players, isDM, timerSetting, gameId,
   difficulty, dmMode, wordPick,
@@ -10,30 +13,30 @@ export default function Lobby({
   const minPlayers = isInsider ? 4 : 3;
 
   return (
-    <div className="page fade-in">
-      <div className="room-code-box">
+    <AnimatedPage>
+      <motion.div className="room-code-box" variants={popIn} initial="hidden" animate="visible">
         <p className="room-code-label">รหัสห้อง</p>
         <p className="room-code-value">{roomCode}</p>
         <p className="room-code-hint">แชร์รหัสนี้ให้เพื่อน</p>
-      </div>
+      </motion.div>
 
-      <div className="card">
+      <motion.div className="card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
         <div className="card__header">
           <span className="card__title">ผู้เล่น</span>
           <span className="badge badge--accent">{players.length} คน</span>
         </div>
-        <ul className="player-list">
+        <motion.ul className="player-list" variants={staggerContainer} initial="hidden" animate="visible">
           {players.map(p => (
-            <li key={p.id} className="player-row">
+            <motion.li key={p.id} className="player-row" variants={fadeUpItem} layout>
               <span className="player-name">{p.name}</span>
               {p.isDM && <span className="badge badge--accent">DM</span>}
-            </li>
+            </motion.li>
           ))}
-        </ul>
-      </div>
+        </motion.ul>
+      </motion.div>
 
       {isDM ? (
-        <div className="bottom-actions">
+        <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
           <div className="field">
             <label className="field__label">เวลาเล่น</label>
             <select
@@ -58,13 +61,15 @@ export default function Lobby({
                     { value: 'medium', label: 'ปานกลาง' },
                     { value: 'hard', label: 'ยาก' },
                   ].map(opt => (
-                    <button
+                    <motion.button
                       key={opt.value}
                       className={`btn btn--sm ${difficulty === opt.value ? 'btn--primary' : 'btn--secondary'}`}
                       onClick={() => onSetDifficulty(opt.value)}
+                      whileTap={tapScale}
+                      layout
                     >
                       {opt.label}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               </div>
@@ -86,27 +91,30 @@ export default function Lobby({
 
               <div className="field field--toggle">
                 <label className="field__label">ให้เลือกคำก่อนเริ่ม</label>
-                <button
+                <motion.button
                   className={`toggle-btn ${wordPick ? 'toggle-btn--on' : ''}`}
                   onClick={() => onSetWordPick(!wordPick)}
+                  whileTap={tapScale}
+                  layout
                 >
                   {wordPick ? 'เปิด' : 'ปิด'}
-                </button>
+                </motion.button>
               </div>
             </>
           )}
 
-          <button
+          <motion.button
             className="btn btn--primary btn--lg"
             disabled={players.length < minPlayers}
             onClick={onStartGame}
+            whileTap={tapScale}
           >
             เริ่มเกม
-          </button>
+          </motion.button>
           {players.length < minPlayers && (
             <p className="hint-text">ต้องมีผู้เล่นอย่างน้อย {minPlayers} คน (ปัจจุบัน {players.length})</p>
           )}
-        </div>
+        </motion.div>
       ) : (
         <div className="waiting-state">
           <span className="waiting-dot" />
@@ -117,6 +125,6 @@ export default function Lobby({
       )}
 
       {error && <p className="error-text">{error}</p>}
-    </div>
+    </AnimatedPage>
   );
 }

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import Timer from './Timer';
 import FallbackImage from './FallbackImage';
+import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 import { SPYFALL_ROLE_IMAGES, SPYFALL_ROLE_INFO, SPYFALL_LOCATION_IMAGES } from '@/lib/images';
 
 export default function SpyfallPlaying({
@@ -31,11 +33,11 @@ export default function SpyfallPlaying({
   const modifier = isSpy ? 'role--spy' : 'role--agent';
 
   return (
-    <div className="page fade-in">
+    <AnimatedPage>
       <Timer total={timerTotal} remaining={timeRemaining} />
 
       {/* ── Role Card ── */}
-      <div className={`role-card ${modifier}`}>
+      <motion.div className={`role-card ${modifier}`} variants={popIn} initial="hidden" animate="visible">
         {!showRole ? (
           <div className="role-card__cover" onClick={() => setShowRole(true)}>
             <span className="role-card__cover-text">แตะเพื่อดูบทบาท</span>
@@ -73,18 +75,19 @@ export default function SpyfallPlaying({
             <span className="role-card__tap-hint">แตะเพื่อซ่อน</span>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* ── Location Grid ── */}
-      <div className="spyfall-locations">
+      <motion.div className="spyfall-locations" variants={fadeUpItem} initial="hidden" animate="visible">
         <h3 className="spyfall-locations__title">สถานที่ทั้งหมด</h3>
-        <div className="spyfall-locations__grid">
+        <motion.div className="spyfall-locations__grid" variants={staggerContainer} initial="hidden" animate="visible">
           {(locations || []).map(loc => {
             const isMyLocation = !isSpy && loc.key === locationKey;
             const isSelected = selectedLocation === loc.key;
             return (
-              <div
+              <motion.div
                 key={loc.key}
+                variants={fadeUpItem}
                 className={`spyfall-loc-card${isMyLocation ? ' spyfall-loc-card--mine' : ''}${isSelected ? ' spyfall-loc-card--selected' : ''}`}
                 onClick={() => isSpy && guessMode && setSelectedLocation(loc.key)}
               >
@@ -96,19 +99,19 @@ export default function SpyfallPlaying({
                   imageClassName="spyfall-loc-card__initial"
                 />
                 <span className="spyfall-loc-card__label">{loc.label}</span>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* ── Actions ── */}
-      <div className="bottom-actions spyfall-actions">
+      <motion.div className="bottom-actions spyfall-actions" variants={fadeUpItem} initial="hidden" animate="visible">
         {/* Spy: guess location */}
         {isSpy && !guessMode && (
-          <button className="btn btn--danger btn--lg" onClick={() => setGuessMode(true)}>
+          <motion.button className="btn btn--danger btn--lg" whileTap={tapScale} onClick={() => setGuessMode(true)}>
             🎯 เดาสถานที่
-          </button>
+          </motion.button>
         )}
         {isSpy && guessMode && (
           <div className="confirm-group">
@@ -118,16 +121,17 @@ export default function SpyfallPlaying({
                 : 'เลือกสถานที่จากตารางด้านบน'}
             </p>
             <div className="confirm-buttons">
-              <button
+              <motion.button
                 className="btn btn--danger"
+                whileTap={tapScale}
                 disabled={!selectedLocation}
                 onClick={() => { onSpyGuess(selectedLocation); setGuessMode(false); }}
               >
                 ยืนยันเดา
-              </button>
-              <button className="btn btn--secondary" onClick={() => { setGuessMode(false); setSelectedLocation(null); }}>
+              </motion.button>
+              <motion.button className="btn btn--secondary" whileTap={tapScale} onClick={() => { setGuessMode(false); setSelectedLocation(null); }}>
                 ยกเลิก
-              </button>
+              </motion.button>
             </div>
           </div>
         )}
@@ -136,40 +140,43 @@ export default function SpyfallPlaying({
         {!guessMode && (
           <>
             {!showVoteConfirm ? (
-              <button className="btn btn--warning btn--lg" onClick={() => setShowVoteConfirm(true)}>
+              <motion.button className="btn btn--warning btn--lg" whileTap={tapScale} onClick={() => setShowVoteConfirm(true)}>
                 🗳️ โหวตหา Spy
-              </button>
+              </motion.button>
             ) : (
               <div className="confirm-group">
                 <p className="confirm-text">เลือกคนที่คิดว่าเป็น Spy</p>
-                <div className="spyfall-vote-targets">
+                <motion.div className="spyfall-vote-targets" variants={staggerContainer} initial="hidden" animate="visible">
                   {players.filter(p => p.id !== myId).map(p => (
-                    <button
+                    <motion.button
                       key={p.id}
+                      variants={fadeUpItem}
+                      whileTap={tapScale}
                       className={`btn btn--sm ${voteTarget === p.id ? 'btn--primary' : 'btn--secondary'}`}
                       onClick={() => setVoteTarget(p.id)}
                     >
                       {p.name}
-                    </button>
+                    </motion.button>
                   ))}
-                </div>
+                </motion.div>
                 <div className="confirm-buttons">
-                  <button
+                  <motion.button
                     className="btn btn--warning"
+                    whileTap={tapScale}
                     disabled={!voteTarget}
                     onClick={() => { onCallVote(voteTarget); setShowVoteConfirm(false); setVoteTarget(null); }}
                   >
                     เริ่มโหวต
-                  </button>
-                  <button className="btn btn--secondary" onClick={() => { setShowVoteConfirm(false); setVoteTarget(null); }}>
+                  </motion.button>
+                  <motion.button className="btn btn--secondary" whileTap={tapScale} onClick={() => { setShowVoteConfirm(false); setVoteTarget(null); }}>
                     ยกเลิก
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             )}
           </>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </AnimatedPage>
   );
 }

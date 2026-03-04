@@ -1,7 +1,9 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { SPYFALL_LOCATION_IMAGES } from '@/lib/images';
 import FallbackImage from './FallbackImage';
+import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
 export default function SpyfallVoting({
   voteInfo,
@@ -16,8 +18,8 @@ export default function SpyfallVoting({
   const myVoted = votes && myId in votes;
 
   return (
-    <div className="page fade-in">
-      <div className="spyfall-vote-panel">
+    <AnimatedPage>
+      <motion.div className="spyfall-vote-panel" variants={popIn} initial="hidden" animate="visible">
         <div className="spyfall-vote-panel__header">
           <h2 className="spyfall-vote-panel__title">🗳️ การโหวต</h2>
           <p className="spyfall-vote-panel__desc">
@@ -37,29 +39,29 @@ export default function SpyfallVoting({
           </span>
         </div>
 
-        <div className="spyfall-vote-panel__players">
+        <motion.div className="spyfall-vote-panel__players" variants={staggerContainer} initial="hidden" animate="visible">
           {players.map(p => {
             const voted = votes && p.id in votes;
             return (
-              <div key={p.id} className={`spyfall-vote-chip${voted ? ' spyfall-vote-chip--voted' : ''}${p.id === targetId ? ' spyfall-vote-chip--target' : ''}`}>
+              <motion.div key={p.id} variants={fadeUpItem} className={`spyfall-vote-chip${voted ? ' spyfall-vote-chip--voted' : ''}${p.id === targetId ? ' spyfall-vote-chip--target' : ''}`}>
                 <span>{p.name}</span>
                 {p.id === targetId && <span className="spyfall-vote-chip__tag">ผู้ต้องสงสัย</span>}
                 {voted && <span className="spyfall-vote-chip__check">✓</span>}
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
 
         {!myVoted ? (
           <div className="spyfall-vote-panel__actions">
             <p className="confirm-text">คุณเห็นด้วยไหมว่า <strong>{targetName}</strong> เป็น Spy?</p>
             <div className="confirm-buttons">
-              <button className="btn btn--success btn--lg" onClick={() => onCastVote(true)}>
+              <motion.button className="btn btn--success btn--lg" whileTap={tapScale} onClick={() => onCastVote(true)}>
                 👍 เห็นด้วย
-              </button>
-              <button className="btn btn--danger btn--lg" onClick={() => onCastVote(false)}>
+              </motion.button>
+              <motion.button className="btn btn--danger btn--lg" whileTap={tapScale} onClick={() => onCastVote(false)}>
                 👎 ไม่เห็นด้วย
-              </button>
+              </motion.button>
             </div>
           </div>
         ) : (
@@ -70,7 +72,7 @@ export default function SpyfallVoting({
             <p>รอผู้เล่นอื่นโหวต</p>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </AnimatedPage>
   );
 }

@@ -28,15 +28,40 @@ export function getSupabase() {
 export const supabase = typeof window !== 'undefined' ? getSupabase() : null;
 
 /**
- * Generate or retrieve a stable player ID for this browser session.
- * Stored in sessionStorage so it survives page refreshes but not new tabs.
+ * Generate or retrieve a stable player ID for this browser tab.
+ * Uses localStorage so it survives page refreshes AND screen-lock / tab-kill.
  */
 export function getPlayerId() {
   if (typeof window === 'undefined') return null;
-  let id = sessionStorage.getItem('boardgame_player_id');
+  let id = localStorage.getItem('boardgame_player_id');
   if (!id) {
     id = crypto.randomUUID();
-    sessionStorage.setItem('boardgame_player_id', id);
+    localStorage.setItem('boardgame_player_id', id);
   }
   return id;
+}
+
+// ── Room session persistence (survive screen-lock / reload) ──
+
+const ROOM_KEY = 'boardgame_room';
+
+/** Save current room info so we can auto-rejoin after screen-lock / reload. */
+export function saveRoomSession(info) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ROOM_KEY, JSON.stringify(info));
+}
+
+/** Load previously saved room session. */
+export function loadRoomSession() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ROOM_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+/** Clear saved room session (when explicitly leaving). */
+export function clearRoomSession() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(ROOM_KEY);
 }

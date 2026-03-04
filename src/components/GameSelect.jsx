@@ -1,7 +1,9 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import FallbackImage from './FallbackImage';
 import { GAME_IMAGES } from '@/lib/images';
+import AnimatedPage, { staggerContainer, fadeUpItem, tapScale } from './AnimatedPage';
 
 const GAMES = [
   {
@@ -40,19 +42,26 @@ const GAMES = [
 
 export default function GameSelect({ onSelect }) {
   return (
-    <div className="page page--center fade-in">
+    <AnimatedPage className="page--center">
       <div className="page-header">
         <h1 className="page-title">เลือกเกม</h1>
         <p className="page-subtitle">เลือกเกมที่ต้องการเล่นกับเพื่อน</p>
       </div>
 
-      <div className="game-grid">
+      <motion.div
+        className="game-grid"
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+      >
         {GAMES.map(game => (
-          <button
+          <motion.button
             key={game.id}
             className={`game-card ${!game.available ? 'game-card--disabled' : ''}`}
             onClick={() => game.available && onSelect(game.id)}
             disabled={!game.available}
+            variants={fadeUpItem}
+            whileTap={game.available ? tapScale : undefined}
           >
             <FallbackImage
               src={GAME_IMAGES[game.id]}
@@ -75,9 +84,9 @@ export default function GameSelect({ onSelect }) {
             {!game.available && (
               <div className="game-card__badge">เร็ว ๆ นี้</div>
             )}
-          </button>
+          </motion.button>
         ))}
-      </div>
-    </div>
+      </motion.div>
+    </AnimatedPage>
   );
 }

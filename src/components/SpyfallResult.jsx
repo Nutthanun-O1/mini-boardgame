@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import FallbackImage from './FallbackImage';
 import { SPYFALL_ROLE_IMAGES, SPYFALL_LOCATION_IMAGES } from '@/lib/images';
+import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
 const REASON_TEXT = {
   'timeout':               'หมดเวลา — Spy ชนะ!',
@@ -31,17 +33,17 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
   };
 
   return (
-    <div className="page fade-in">
+    <AnimatedPage>
       {/* ── Result Banner ── */}
-      <div className={`reveal-banner ${isSpyWin ? 'reveal-banner--spy-win' : 'reveal-banner--players-win'}`}>
+      <motion.div className={`reveal-banner ${isSpyWin ? 'reveal-banner--spy-win' : 'reveal-banner--players-win'}`} variants={popIn} initial="hidden" animate="visible">
         <p className="reveal-banner__label">
           {isSpyWin ? '🕵️ Spy ชนะ!' : '🎉 ผู้เล่นชนะ!'}
         </p>
         <p className="reveal-banner__word">{reasonLabel}</p>
-      </div>
+      </motion.div>
 
       {/* ── Spy Reveal ── */}
-      <div className="insider-reveal">
+      <motion.div className="insider-reveal" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, type: 'spring', stiffness: 300, damping: 24 }}>
         <p className="insider-reveal__label">Spy คือ</p>
         <FallbackImage
           src={SPYFALL_ROLE_IMAGES.Spy}
@@ -51,10 +53,10 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
           imageClassName="insider-reveal__initial"
         />
         <p className="insider-reveal__name">{spy}</p>
-      </div>
+      </motion.div>
 
       {/* ── Location Reveal ── */}
-      <div className="spyfall-result-location">
+      <motion.div className="spyfall-result-location" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.35 }}>
         <p className="spyfall-result-location__label">สถานที่คือ</p>
         <FallbackImage
           src={SPYFALL_LOCATION_IMAGES[locationKey]}
@@ -64,7 +66,7 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
           imageClassName="spyfall-result-location__initial"
         />
         <p className="spyfall-result-location__name">{location}</p>
-      </div>
+      </motion.div>
 
       {guessedLocation && (
         <div className="spyfall-result-guess">
@@ -83,17 +85,17 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
       )}
 
       {/* ── Player Roles ── */}
-      <div className="card">
+      <motion.div className="card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.35 }}>
         <div className="card__header">
           <span className="card__title">บทบาทของทุกคน</span>
           <span className="badge badge--neutral">บทบาทคุณ: {myRole}</span>
         </div>
-        <ul className="role-list">
+        <motion.ul className="role-list" variants={staggerContainer} initial="hidden" animate="visible">
           {(gamePlayers || []).map(p => {
             const role = roles?.[p.id];
             const isSpy = p.id === spyId;
             return (
-              <li key={p.id} className={`role-list__row${isSpy ? ' role-list__row--spy' : ''}`}>
+              <motion.li key={p.id} className={`role-list__row${isSpy ? ' role-list__row--spy' : ''}`} variants={fadeUpItem}>
                 <div className="role-list__left">
                   <FallbackImage
                     src={SPYFALL_ROLE_IMAGES[role]}
@@ -105,18 +107,18 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
                   <span className="role-list__name">{p.name}</span>
                 </div>
                 <span className={`badge ${ROLE_BADGE[role] || ''}`}>{role}</span>
-              </li>
+              </motion.li>
             );
           })}
-        </ul>
-      </div>
+        </motion.ul>
+      </motion.div>
 
       {isDM ? (
-        <div className="bottom-actions">
-          <button className="btn btn--primary btn--lg" onClick={onPlayAgain}>
+        <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+          <motion.button className="btn btn--primary btn--lg" onClick={onPlayAgain} whileTap={tapScale}>
             เล่นรอบใหม่
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
       ) : (
         <div className="waiting-state">
           <span className="waiting-dot" />
@@ -125,6 +127,6 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
           <p>รอ DM เริ่มรอบใหม่</p>
         </div>
       )}
-    </div>
+    </AnimatedPage>
   );
 }

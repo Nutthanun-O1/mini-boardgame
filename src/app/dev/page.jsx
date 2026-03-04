@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import GameSelect from '@/components/GameSelect';
+import Home from '@/components/Home';
 import Lobby from '@/components/Lobby';
+import WordPick from '@/components/WordPick';
 import Playing from '@/components/Playing';
 import Discussion from '@/components/Discussion';
 import Result from '@/components/Result';
@@ -11,11 +14,21 @@ import SpyfallVoting from '@/components/SpyfallVoting';
 import SpyfallLastChance from '@/components/SpyfallLastChance';
 import SpyfallResult from '@/components/SpyfallResult';
 
+/* ── Constants ── */
 const INSIDER_ROLES = ['Master', 'Insider', 'Common'];
 const SPYFALL_ROLES = ['Spy', 'Agent'];
 
-const INSIDER_PHASES = ['gameSelect', 'lobby', 'playing', 'discussion', 'result'];
-const SPYFALL_PHASES = ['gameSelect', 'lobby', 'playing', 'spyfall-voting', 'spyfall-last-chance', 'spyfall-result'];
+const INSIDER_PHASES = ['gameSelect', 'home', 'lobby', 'word-pick', 'playing', 'discussion', 'result'];
+const SPYFALL_PHASES = ['gameSelect', 'home', 'lobby', 'playing', 'spyfall-voting', 'spyfall-last-chance', 'spyfall-result'];
+
+const SPYFALL_REASONS = [
+  { value: 'spy-caught', label: 'จับ Spy ได้' },
+  { value: 'spy-guessed-correct', label: 'Spy เดาถูก' },
+  { value: 'spy-guessed-wrong', label: 'Spy เดาผิด' },
+  { value: 'spy-last-guess-correct', label: 'Spy โดนจับ แต่เดาถูก' },
+  { value: 'timeout', label: 'หมดเวลา' },
+  { value: 'wrong-accusation', label: 'โหวตผิดคน' },
+];
 
 const MOCK_PLAYERS = [
   { id: '1', name: 'DevUser', isDM: true },
@@ -50,29 +63,59 @@ const MOCK_LOCATIONS = [
   { key: 'hotel', label: 'โรงแรม' },
 ];
 
+const MOCK_WORD_CHOICES = [
+  { word: 'แมว', category: 'สัตว์' },
+  { word: 'กีตาร์', category: 'ดนตรี' },
+  { word: 'พิซซ่า', category: 'อาหาร' },
+  { word: 'เอเวอเรสต์', category: 'ภูเขา' },
+  { word: 'ฮอกวอตส์', category: 'แฟนตาซี' },
+  { word: 'รถไฟฟ้า', category: 'ยานพาหนะ' },
+];
+
 export default function DevPage() {
-  const [game, setGame] = useState('insider'); // 'insider' | 'spyfall'
+  /* ── Game / Phase / Role ── */
+  const [game, setGame] = useState('insider');
   const [phase, setPhase] = useState('playing');
   const [role, setRole] = useState('Master');
   const [isDM, setIsDM] = useState(true);
+
+  /* ── Timer ── */
+  const [timerSetting, setTimerSetting] = useState(300);
   const [timer, setTimer] = useState(180);
 
+  /* ── Insider config ── */
+  const [difficulty, setDifficulty] = useState('medium');
+  const [dmMode, setDmMode] = useState('creator');
+  const [wordPick, setWordPick] = useState(false);
+  const [mockWord, setMockWord] = useState('แมว');
+
+  /* ── Spyfall config ── */
+  const [spyfallReason, setSpyfallReason] = useState('spy-caught');
+
+  /* ── Toolbar collapsed ── */
+  const [toolbarOpen, setToolbarOpen] = useState(true);
+
   const isSpyfall = game === 'spyfall';
-  const roles = isSpyfall ? SPYFALL_ROLES : INSIDER_ROLES;
   const phases = isSpyfall ? SPYFALL_PHASES : INSIDER_PHASES;
 
-  const word = role === 'Common' ? null : 'แมว';
+  // Word visibility logic (same as main page)
+  const word = (() => {
+    if (isSpyfall) return null;
+    if (role === 'Common') return null;
+    return mockWord;
+  })();
   const category = 'สัตว์';
 
-  // auto-tick timer in playing phase
+  /* ── Auto-tick timer ── */
   useEffect(() => {
     if (phase !== 'playing') return;
     const id = setInterval(() => setTimer(t => Math.max(0, t - 1)), 1000);
     return () => clearInterval(id);
   }, [phase]);
 
-  const resetTimer = useCallback(() => setTimer(180), []);
+  const resetTimer = useCallback(() => setTimer(timerSetting), [timerSetting]);
 
+  /* ── Cycle role ── */
   const cycleRole = useCallback(() => {
     const currentRoles = isSpyfall ? SPYFALL_ROLES : INSIDER_ROLES;
     setRole(prev => {
@@ -83,6 +126,7 @@ export default function DevPage() {
     });
   }, [isSpyfall]);
 
+  /* ── Switch game ── */
   function switchGame(g) {
     setGame(g);
     const firstRole = g === 'spyfall' ? 'Spy' : 'Master';
@@ -92,33 +136,44 @@ export default function DevPage() {
     resetTimer();
   }
 
+  /* ── Shared props (mirrors main page) ── */
   const shared = {
     isDM,
     players: MOCK_PLAYERS,
-    word: 'แมว',
+    word,
     category,
     error: '',
     roomCode: 'TEST',
     playerName: 'DevUser',
   };
 
+  /* ── Mock results ── */
   const mockInsiderResult = {
-    word: 'แมว',
+    word: mockWord,
     category,
     insider: 'Alice',
     insiderId: '2',
     gamePlayers: MOCK_PLAYERS,
+    players: MOCK_PLAYERS,
     roles: MOCK_INSIDER_ROLES,
     timeUsed: 120,
+    timedOut: false,
   };
 
+  const spyfallWinner = ['spy-caught', 'spy-guessed-wrong'].includes(spyfallReason)
+    ? 'players'
+    : 'spy';
+
   const mockSpyfallResult = {
-    winner: 'players',
-    reason: 'spy-caught',
+    winner: spyfallWinner,
+    reason: spyfallReason,
     spy: 'DevUser',
     spyId: '1',
     location: 'โรงเรียน',
     locationKey: 'school',
+    guessedLocation: spyfallReason.includes('guess') ? 'โรงพยาบาล' : null,
+    guessedLocationKey: spyfallReason.includes('guess') ? 'hospital' : null,
+    accusedName: spyfallReason === 'wrong-accusation' ? 'Bob' : null,
     players: MOCK_PLAYERS,
     roles: MOCK_SPYFALL_ROLES,
   };
@@ -134,9 +189,17 @@ export default function DevPage() {
 
   return (
     <div className="app">
-      {/* ── Dev Toolbar ── */}
+      {/* ════════════════════════════════════════
+          DEV TOOLBAR — Row 1
+          ════════════════════════════════════════ */}
       <div className="dev-toolbar">
-        <span className="dev-toolbar__badge">DEV</span>
+        <button
+          className="dev-toolbar__badge"
+          onClick={() => setToolbarOpen(v => !v)}
+          style={{ cursor: 'pointer', border: 'none' }}
+        >
+          DEV {toolbarOpen ? '▼' : '▶'}
+        </button>
 
         <div className="dev-toolbar__group">
           <label className="dev-toolbar__label">Game</label>
@@ -184,100 +247,252 @@ export default function DevPage() {
         </div>
       </div>
 
-      {/* ── Header ── */}
+      {/* ── Row 2: collapsible config ── */}
+      {toolbarOpen && (
+        <div className="dev-toolbar" style={{ borderTop: '1px solid rgba(124,58,237,0.3)' }}>
+          <div className="dev-toolbar__group">
+            <label className="dev-toolbar__label">Timer</label>
+            <select
+              className="dev-toolbar__select"
+              value={timerSetting}
+              onChange={e => { setTimerSetting(Number(e.target.value)); setTimer(Number(e.target.value)); }}
+            >
+              <option value={180}>3m</option>
+              <option value={300}>5m</option>
+              <option value={420}>7m</option>
+              <option value={600}>10m</option>
+            </select>
+          </div>
+
+          {!isSpyfall && (
+            <>
+              <div className="dev-toolbar__group">
+                <label className="dev-toolbar__label">Diff</label>
+                <select
+                  className="dev-toolbar__select"
+                  value={difficulty}
+                  onChange={e => setDifficulty(e.target.value)}
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Med</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+
+              <div className="dev-toolbar__group">
+                <label className="dev-toolbar__label">DM Mode</label>
+                <select
+                  className="dev-toolbar__select"
+                  value={dmMode}
+                  onChange={e => setDmMode(e.target.value)}
+                >
+                  <option value="creator">Creator</option>
+                  <option value="random">Random</option>
+                </select>
+              </div>
+
+              <div className="dev-toolbar__group">
+                <label className="dev-toolbar__label">WordPick</label>
+                <button
+                  className={`dev-toolbar__toggle ${wordPick ? 'dev-toolbar__toggle--on' : ''}`}
+                  onClick={() => setWordPick(v => !v)}
+                >
+                  {wordPick ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              <div className="dev-toolbar__group">
+                <label className="dev-toolbar__label">Word</label>
+                <input
+                  className="dev-toolbar__select"
+                  style={{ width: 72 }}
+                  value={mockWord}
+                  onChange={e => setMockWord(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {isSpyfall && (
+            <div className="dev-toolbar__group">
+              <label className="dev-toolbar__label">Result</label>
+              <select
+                className="dev-toolbar__select"
+                value={spyfallReason}
+                onChange={e => setSpyfallReason(e.target.value)}
+              >
+                {SPYFALL_REASONS.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          HEADER (same as main)
+          ════════════════════════════════════════ */}
       <header className="header">
         <div className="header-left">
+          {phase !== 'gameSelect' && (
+            <button className="header-back" onClick={() => setPhase('gameSelect')}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
           <span className="header-title">Board Game</span>
         </div>
-        <span className="header-room">TEST</span>
+        {phase !== 'gameSelect' && phase !== 'home' && (
+          <span className="header-room">TEST</span>
+        )}
       </header>
 
-      {/* ── Main Content ── */}
+      {/* ════════════════════════════════════════
+          MAIN CONTENT
+          ════════════════════════════════════════ */}
       <main className="main">
-        {phase === 'gameSelect' && (
-          <GameSelect onSelect={(id) => { switchGame(id); setPhase('lobby'); }} />
-        )}
+        <AnimatePresence mode="wait">
+          {/* ── Game Select ── */}
+          {phase === 'gameSelect' && (
+            <GameSelect
+              key="gameSelect"
+              onSelect={(id) => { switchGame(id); setPhase('home'); }}
+            />
+          )}
 
-        {phase === 'lobby' && (
-          <Lobby
-            {...shared}
-            timerSetting={300}
-            onSetTimer={() => {}}
-            onStartGame={() => { resetTimer(); setPhase('playing'); }}
-          />
-        )}
+          {/* ── Home (Create / Join) ── */}
+          {phase === 'home' && (
+            <Home
+              key="home"
+              gameId={game}
+              onCreateRoom={() => setPhase('lobby')}
+              onJoinRoom={() => setPhase('lobby')}
+              onBack={() => setPhase('gameSelect')}
+              error=""
+            />
+          )}
 
-        {/* ── Insider Phases ── */}
-        {phase === 'playing' && !isSpyfall && (
-          <Playing
-            {...shared}
-            word={word}
-            role={role}
-            timerTotal={180}
-            timeRemaining={timer}
-            onGuessCorrect={() => setPhase('discussion')}
-          />
-        )}
+          {/* ── Lobby ── */}
+          {phase === 'lobby' && (
+            <Lobby
+              key="lobby"
+              {...shared}
+              gameId={game}
+              timerSetting={timerSetting}
+              difficulty={difficulty}
+              dmMode={dmMode}
+              wordPick={wordPick}
+              onSetTimer={(v) => { setTimerSetting(v); setTimer(v); }}
+              onSetDifficulty={setDifficulty}
+              onSetDmMode={setDmMode}
+              onSetWordPick={setWordPick}
+              onStartGame={() => {
+                resetTimer();
+                setPhase(wordPick && !isSpyfall ? 'word-pick' : 'playing');
+              }}
+            />
+          )}
 
-        {phase === 'discussion' && (
-          <Discussion
-            {...shared}
-            result={{ timeUsed: 120 }}
-            onRevealInsider={() => setPhase('result')}
-          />
-        )}
+          {/* ── Word Pick (Insider only) ── */}
+          {phase === 'word-pick' && (
+            <WordPick
+              key="word-pick"
+              isDM={isDM}
+              choices={MOCK_WORD_CHOICES}
+              onPickWord={(choice) => {
+                setMockWord(choice.word);
+                resetTimer();
+                setPhase('playing');
+              }}
+            />
+          )}
 
-        {phase === 'result' && !isSpyfall && (
-          <Result
-            {...shared}
-            result={mockInsiderResult}
-            myRole={role}
-            onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
-          />
-        )}
+          {/* ── Insider Playing ── */}
+          {phase === 'playing' && !isSpyfall && (
+            <Playing
+              key="playing"
+              {...shared}
+              word={word}
+              role={role}
+              timerTotal={timerSetting}
+              timeRemaining={timer}
+              onGuessCorrect={() => setPhase('discussion')}
+            />
+          )}
 
-        {/* ── Spyfall Phases ── */}
-        {phase === 'playing' && isSpyfall && (
-          <SpyfallPlaying
-            role={role}
-            location={role === 'Spy' ? null : 'โรงเรียน'}
-            locationKey={role === 'Spy' ? null : 'school'}
-            locations={MOCK_LOCATIONS}
-            timerTotal={180}
-            timeRemaining={timer}
-            players={MOCK_PLAYERS}
-            myId="1"
-            onCallVote={(targetId) => setPhase('spyfall-voting')}
-            onSpyGuess={(key) => setPhase('spyfall-result')}
-          />
-        )}
+          {/* ── Discussion ── */}
+          {phase === 'discussion' && (
+            <Discussion
+              key="discussion"
+              {...shared}
+              result={{ timeUsed: timerSetting - timer }}
+              onRevealInsider={() => setPhase('result')}
+            />
+          )}
 
-        {phase === 'spyfall-voting' && (
-          <SpyfallVoting
-            voteInfo={mockVoteInfo}
-            players={MOCK_PLAYERS}
-            myId="1"
-            onCastVote={(agree) => setPhase(agree ? 'spyfall-last-chance' : 'playing')}
-          />
-        )}
+          {/* ── Insider Result ── */}
+          {phase === 'result' && !isSpyfall && (
+            <Result
+              key="result"
+              {...shared}
+              result={mockInsiderResult}
+              myRole={role}
+              onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
+            />
+          )}
 
-        {phase === 'spyfall-last-chance' && (
-          <SpyfallLastChance
-            spy="DevUser"
-            locations={MOCK_LOCATIONS}
-            isSpy={role === 'Spy'}
-            onLastGuess={(key) => setPhase('spyfall-result')}
-          />
-        )}
+          {/* ── Spyfall Playing ── */}
+          {phase === 'playing' && isSpyfall && (
+            <SpyfallPlaying
+              key="spyfall-playing"
+              role={role}
+              location={role === 'Spy' ? null : 'โรงเรียน'}
+              locationKey={role === 'Spy' ? null : 'school'}
+              locations={MOCK_LOCATIONS}
+              timerTotal={timerSetting}
+              timeRemaining={timer}
+              players={MOCK_PLAYERS}
+              myId="1"
+              onCallVote={() => setPhase('spyfall-voting')}
+              onSpyGuess={() => setPhase('spyfall-result')}
+            />
+          )}
 
-        {phase === 'spyfall-result' && (
-          <SpyfallResult
-            result={mockSpyfallResult}
-            isDM={isDM}
-            myRole={role}
-            onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
-          />
-        )}
+          {/* ── Spyfall Voting ── */}
+          {phase === 'spyfall-voting' && (
+            <SpyfallVoting
+              key="spyfall-voting"
+              voteInfo={mockVoteInfo}
+              players={MOCK_PLAYERS}
+              myId="1"
+              onCastVote={(agree) => setPhase(agree ? 'spyfall-last-chance' : 'playing')}
+            />
+          )}
+
+          {/* ── Spyfall Last Chance ── */}
+          {phase === 'spyfall-last-chance' && (
+            <SpyfallLastChance
+              key="spyfall-last-chance"
+              spy="DevUser"
+              locations={MOCK_LOCATIONS}
+              isSpy={role === 'Spy'}
+              onLastGuess={() => setPhase('spyfall-result')}
+            />
+          )}
+
+          {/* ── Spyfall Result ── */}
+          {phase === 'spyfall-result' && (
+            <SpyfallResult
+              key="spyfall-result"
+              result={mockSpyfallResult}
+              isDM={isDM}
+              myRole={role}
+              onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
+            />
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
