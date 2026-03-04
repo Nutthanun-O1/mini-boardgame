@@ -1,5 +1,8 @@
 'use client';
 
+import FallbackImage from './FallbackImage';
+import { ROLE_IMAGES } from '@/lib/images';
+
 export default function Result({ result, word, category, isDM, myRole, onPlayAgain }) {
   const isTimedOut = result?.timedOut;
   const gamePlayers = result?.gamePlayers || [];
@@ -21,9 +24,13 @@ export default function Result({ result, word, category, isDM, myRole, onPlayAga
 
       <div className="insider-reveal">
         <p className="insider-reveal__label">Insider คือ</p>
-        <div className="insider-reveal__image">
-          <span className="insider-reveal__initial">{result?.insider?.[0] || '?'}</span>
-        </div>
+        <FallbackImage
+          src={ROLE_IMAGES.Insider}
+          fallback={result?.insider?.[0] || '?'}
+          alt="Insider"
+          className="insider-reveal__image"
+          imageClassName="insider-reveal__initial"
+        />
         <p className="insider-reveal__name">{result?.insider}</p>
       </div>
 
@@ -38,7 +45,16 @@ export default function Result({ result, word, category, isDM, myRole, onPlayAga
             const isInsider = p.id === result?.insiderId;
             return (
               <li key={p.id} className={`role-list__row${isInsider ? ' role-list__row--insider' : ''}`}>
-                <span className="role-list__name">{p.name}</span>
+                <div className="role-list__left">
+                  <FallbackImage
+                    src={ROLE_IMAGES[role]}
+                    fallback={p.name?.[0] || '?'}
+                    alt={role}
+                    className="role-list__avatar"
+                    imageClassName="role-list__avatar-initial"
+                  />
+                  <span className="role-list__name">{p.name}</span>
+                </div>
                 <span className={`badge ${ROLE_BADGE[role] || ''}`}>{role}</span>
               </li>
             );

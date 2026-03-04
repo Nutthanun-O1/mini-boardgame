@@ -1,5 +1,8 @@
 'use client';
 
+import FallbackImage from './FallbackImage';
+import { GAME_IMAGES } from '@/lib/images';
+
 const GAMES = [
   {
     id: 'insider',
@@ -51,9 +54,13 @@ export default function GameSelect({ onSelect }) {
             onClick={() => game.available && onSelect(game.id)}
             disabled={!game.available}
           >
-            <div className="game-card__image">
-              <span className="game-card__initial">{game.title[0]}</span>
-            </div>
+            <FallbackImage
+              src={GAME_IMAGES[game.id]}
+              fallback={game.title[0]}
+              alt={game.title}
+              className="game-card__image"
+              imageClassName="game-card__initial"
+            />
 
             <div className="game-card__body">
               <h3 className="game-card__title">{game.title}</h3>

@@ -2,18 +2,23 @@
 
 import { useState } from 'react';
 import Timer from './Timer';
+import { ROLE_IMAGES, ROLE_INFO } from '@/lib/images';
 
-const ROLE_STYLES = {
-  Master: { label: 'Master (DM)', modifier: 'role--master' },
-  Insider: { label: 'Insider', modifier: 'role--insider' },
-  Common: { label: 'Common', modifier: 'role--common' },
+const ROLE_MODIFIERS = {
+  Master: 'role--master',
+  Insider: 'role--insider',
+  Common: 'role--common',
 };
 
 export default function Playing({ role, word, category, timerTotal, timeRemaining, isDM, onGuessCorrect }) {
   const [showRole, setShowRole] = useState(false);
   const [confirmGuess, setConfirmGuess] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  const config = ROLE_STYLES[role] || ROLE_STYLES.Common;
+  const modifier = ROLE_MODIFIERS[role] || ROLE_MODIFIERS.Common;
+  const info = ROLE_INFO[role] || ROLE_INFO.Common;
+  const imgSrc = ROLE_IMAGES[role];
+  const hasImage = imgSrc && !imgError;
 
   return (
     <div className="page fade-in">
@@ -23,30 +28,41 @@ export default function Playing({ role, word, category, timerTotal, timeRemainin
         หมวด: <strong>{category}</strong>
       </div>
 
-      <div className={`role-card ${config.modifier}`}>
+      <div className={`role-card ${modifier}`}>
         {!showRole ? (
           <div className="role-card__cover" onClick={() => setShowRole(true)}>
             <span className="role-card__cover-text">แตะเพื่อดูบทบาท</span>
           </div>
         ) : (
-          <div className="role-card__content">
-            <div className="role-card__image">
-              <span className="role-card__initial">{config.label[0]}</span>
+          <div className="role-card__revealed" onClick={() => setShowRole(false)}>
+            {/* ── Image Area ── */}
+            <div className="role-card__art">
+              {hasImage ? (
+                <img
+                  src={imgSrc}
+                  alt={info.label}
+                  className="role-card__art-img"
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                <span className="role-card__art-initial">{info.label[0]}</span>
+              )}
             </div>
-            <p className="role-card__label">{config.label}</p>
 
-            {word ? (
-              <div className="role-card__word">
-                <p className="role-card__word-label">คำลับ</p>
-                <p className="role-card__word-value">{word}</p>
-              </div>
-            ) : (
-              <p className="role-card__hint">คุณไม่รู้คำลับ — ถามคำถาม Yes/No เพื่อหาคำตอบ</p>
-            )}
+            {/* ── Info Overlay ── */}
+            <div className="role-card__info">
+              <p className="role-card__label">{info.label}</p>
+              <p className="role-card__desc">{info.description}</p>
 
-            <button className="btn btn--ghost btn--sm" onClick={() => setShowRole(false)}>
-              ซ่อน
-            </button>
+              {word ? (
+                <div className="role-card__word">
+                  <p className="role-card__word-label">คำลับ</p>
+                  <p className="role-card__word-value">{word}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <span className="role-card__tap-hint">แตะเพื่อซ่อน</span>
           </div>
         )}
       </div>
