@@ -1,8 +1,10 @@
+'use client';
+
 export default function Timer({ total, remaining }) {
-  const progress = total > 0 ? remaining / total : 0
-  const isLow = remaining <= 30
-  const minutes = Math.floor(remaining / 60)
-  const seconds = remaining % 60
+  const progress = total > 0 ? remaining / total : 0;
+  const isLow = remaining <= 30;
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
 
   return (
     <div className={`timer ${isLow ? 'timer--low' : ''}`}>
@@ -16,5 +18,5 @@ export default function Timer({ total, remaining }) {
         />
       </div>
     </div>
-  )
+  );
 }

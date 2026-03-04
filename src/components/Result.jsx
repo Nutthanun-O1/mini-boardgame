@@ -1,13 +1,15 @@
+'use client';
+
 export default function Result({ result, word, category, isDM, myRole, onPlayAgain }) {
-  const isTimedOut = result?.timedOut
-  const gamePlayers = result?.gamePlayers || []
-  const roles = result?.roles || {}
+  const isTimedOut = result?.timedOut;
+  const gamePlayers = result?.gamePlayers || [];
+  const roles = result?.roles || {};
 
   const ROLE_BADGE = {
     Master: 'badge--master',
     Insider: 'badge--insider',
     Common: 'badge--common',
-  }
+  };
 
   return (
     <div className="page fade-in">
@@ -32,14 +34,14 @@ export default function Result({ result, word, category, isDM, myRole, onPlayAga
         </div>
         <ul className="role-list">
           {gamePlayers.map(p => {
-            const role = roles[p.id]
-            const isInsider = p.id === result?.insiderId
+            const role = roles[p.id];
+            const isInsider = p.id === result?.insiderId;
             return (
               <li key={p.id} className={`role-list__row${isInsider ? ' role-list__row--insider' : ''}`}>
                 <span className="role-list__name">{p.name}</span>
                 <span className={`badge ${ROLE_BADGE[role] || ''}`}>{role}</span>
               </li>
-            )
+            );
           })}
         </ul>
       </div>
@@ -59,5 +61,5 @@ export default function Result({ result, word, category, isDM, myRole, onPlayAga
         </div>
       )}
     </div>
-  )
+  );
 }

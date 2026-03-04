@@ -1,3 +1,5 @@
+'use client';
+
 export default function Lobby({
   roomCode, players, isDM, timerSetting,
   onSetTimer, onStartGame, error
@@ -62,5 +64,5 @@ export default function Lobby({
 
       {error && <p className="error-text">{error}</p>}
     </div>
-  )
+  );
 }

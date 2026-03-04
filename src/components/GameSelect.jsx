@@ -1,3 +1,5 @@
+'use client';
+
 const GAMES = [
   {
     id: 'insider',
@@ -31,7 +33,7 @@ const GAMES = [
     duration: '15 – 20 นาที',
     available: false,
   },
-]
+];
 
 export default function GameSelect({ onSelect }) {
   return (
@@ -70,5 +72,5 @@ export default function GameSelect({ onSelect }) {
         ))}
       </div>
     </div>
-  )
+  );
 }

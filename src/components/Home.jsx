@@ -1,14 +1,16 @@
-import { useState } from 'react'
+'use client';
 
-const GAME_TITLES = { insider: 'Insider', werewolf: 'Werewolf', spyfall: 'Spyfall', codenames: 'Codenames' }
+import { useState } from 'react';
+
+const GAME_TITLES = { insider: 'Insider', werewolf: 'Werewolf', spyfall: 'Spyfall', codenames: 'Codenames' };
 
 export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }) {
-  const [mode, setMode] = useState(null)
-  const [name, setName] = useState('')
-  const [code, setCode] = useState('')
-  const [duration, setDuration] = useState(300)
+  const [mode, setMode] = useState(null);
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [duration, setDuration] = useState(300);
 
-  const title = GAME_TITLES[gameId] || gameId
+  const title = GAME_TITLES[gameId] || gameId;
 
   if (!mode) {
     return (
@@ -29,7 +31,7 @@ export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }
           </button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -98,6 +100,5 @@ export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }
         {error && <p className="error-text">{error}</p>}
       </div>
     </div>
-  )
+  );
 }
-

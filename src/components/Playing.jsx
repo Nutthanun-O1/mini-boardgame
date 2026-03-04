@@ -1,17 +1,19 @@
-import { useState } from 'react'
-import Timer from '../components/Timer'
+'use client';
+
+import { useState } from 'react';
+import Timer from './Timer';
 
 const ROLE_STYLES = {
   Master: { label: 'Master (DM)', modifier: 'role--master' },
   Insider: { label: 'Insider', modifier: 'role--insider' },
   Common: { label: 'Common', modifier: 'role--common' },
-}
+};
 
 export default function Playing({ role, word, category, timerTotal, timeRemaining, isDM, onGuessCorrect }) {
-  const [showRole, setShowRole] = useState(false)
-  const [confirmGuess, setConfirmGuess] = useState(false)
+  const [showRole, setShowRole] = useState(false);
+  const [confirmGuess, setConfirmGuess] = useState(false);
 
-  const config = ROLE_STYLES[role] || ROLE_STYLES.Common
+  const config = ROLE_STYLES[role] || ROLE_STYLES.Common;
 
   return (
     <div className="page fade-in">
@@ -59,7 +61,7 @@ export default function Playing({ role, word, category, timerTotal, timeRemainin
             <div className="confirm-group">
               <p className="confirm-text">ยืนยันว่ามีผู้เล่นทายถูกแล้ว?</p>
               <div className="confirm-buttons">
-                <button className="btn btn--success" onClick={() => { onGuessCorrect(); setConfirmGuess(false) }}>
+                <button className="btn btn--success" onClick={() => { onGuessCorrect(); setConfirmGuess(false); }}>
                   ยืนยัน
                 </button>
                 <button className="btn btn--secondary" onClick={() => setConfirmGuess(false)}>
@@ -71,5 +73,5 @@ export default function Playing({ role, word, category, timerTotal, timeRemainin
         </div>
       )}
     </div>
-  )
+  );
 }

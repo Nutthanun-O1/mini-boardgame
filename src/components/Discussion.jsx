@@ -1,7 +1,9 @@
-import { useState } from 'react'
+'use client';
+
+import { useState } from 'react';
 
 export default function Discussion({ word, category, isDM, players, result, onRevealInsider }) {
-  const [confirmReveal, setConfirmReveal] = useState(false)
+  const [confirmReveal, setConfirmReveal] = useState(false);
 
   return (
     <div className="page fade-in">
@@ -57,5 +59,5 @@ export default function Discussion({ word, category, isDM, players, result, onRe
         </div>
       )}
     </div>
-  )
+  );
 }

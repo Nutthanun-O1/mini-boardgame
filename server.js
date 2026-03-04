@@ -1,13 +1,38 @@
-const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
-const insiderWords = require('./data/insider-words');
 
-const app = express();
-app.use(cors());
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const insiderWords = {
+  animals: [
+    'แมว','สุนัข','ช้าง','ม้า','กระต่าย','เสือ','สิงโต',
+    'ลิง','งู','เพนกวิน','ปลาโลมา','นกแก้ว','จระเข้',
+    'ยีราฟ','หมี','แมงมุม','ผีเสื้อ','ปลาหมึก','กบ','เต่า'
+  ],
+  food: [
+    'ส้มตำ','ข้าวผัด','พิซซ่า','ซูชิ','แฮมเบอร์เกอร์',
+    'ไอศกรีม','ต้มยำกุ้ง','ผัดไทย','สเต็ก','ราเมน',
+    'ขนมปัง','เค้ก','ช็อกโกแลต','มะม่วง','แตงโม'
+  ],
+  places: [
+    'โรงเรียน','โรงพยาบาล','สนามบิน','ชายหาด','ภูเขา',
+    'ห้างสรรพสินค้า','สวนสนุก','พิพิธภัณฑ์','วัด','สถานีรถไฟ',
+    'ตลาดนัด','สวนสัตว์','ห้องสมุด','สระว่ายน้ำ','โรงภาพยนตร์'
+  ],
+  objects: [
+    'โทรศัพท์','นาฬิกา','กุญแจ','ร่ม','แว่นตา','กระเป๋า',
+    'กรรไกร','กระจก','เทียน','ลูกโป่ง',
+    'หมอน','พัดลม','ไฟฉาย','กล้องถ่ายรูป','ดินสอ'
+  ],
+  activities: [
+    'ว่ายน้ำ','วิ่ง','ร้องเพลง','ทำอาหาร','วาดรูป',
+    'เต้นรำ','ตกปลา','ปีนเขา','ถ่ายรูป','เล่นเกม',
+    'อ่านหนังสือ','นอนหลับ','ดูหนัง','ช้อปปิ้ง','แคมป์ปิ้ง'
+  ],
+  occupations: [
+    'หมอ','ครู','ตำรวจ','นักบิน','พ่อครัว',
+    'นักดับเพลิง','ทนายความ','วิศวกร','นักบินอวกาศ','ชาวนา',
+    'จิตรกร','นักดนตรี','นักเขียน','ช่างภาพ','สัตวแพทย์'
+  ]
+};
 
 const rooms = new Map();
 
@@ -42,6 +67,18 @@ function emitRoomState(code) {
   if (!room) return;
   io.to(code).emit('players-updated', room.players);
 }
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Socket.io server is running');
+});
+
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
 
 io.on('connection', (socket) => {
 
@@ -232,4 +269,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Socket.io server running on port ${PORT}`));
