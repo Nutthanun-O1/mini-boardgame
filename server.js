@@ -1,6 +1,9 @@
 const http = require('http');
 const { Server } = require('socket.io');
 
+// ══════════════════════════════════════════════
+//  Insider word bank
+// ══════════════════════════════════════════════
 const insiderWords = {
   animals: [
     'แมว','สุนัข','ช้าง','ม้า','กระต่าย','เสือ','สิงโต',
@@ -34,6 +37,32 @@ const insiderWords = {
   ]
 };
 
+// ══════════════════════════════════════════════
+//  Spyfall locations  (key → Thai label)
+// ══════════════════════════════════════════════
+const spyfallLocations = {
+  school:         'โรงเรียน',
+  hospital:       'โรงพยาบาล',
+  airport:        'สนามบิน',
+  beach:          'ชายหาด',
+  casino:         'คาสิโน',
+  supermarket:    'ซูเปอร์มาร์เก็ต',
+  restaurant:     'ร้านอาหาร',
+  spaceship:      'ยานอวกาศ',
+  submarine:      'เรือดำน้ำ',
+  zoo:            'สวนสัตว์',
+  temple:         'วัด',
+  bank:           'ธนาคาร',
+  circus:         'ละครสัตว์',
+  pirate_ship:    'เรือโจรสลัด',
+  police_station: 'สถานีตำรวจ',
+  movie_studio:   'สตูดิโอถ่ายหนัง',
+  train:          'รถไฟ',
+  amusement_park: 'สวนสนุก',
+  university:     'มหาวิทยาลัย',
+  hotel:          'โรงแรม',
+};
+
 const rooms = new Map();
 
 const CATEGORY_LABELS = {
@@ -61,6 +90,17 @@ function pickWord() {
     category: CATEGORY_LABELS[key] || key,
   };
 }
+
+function pickSpyfallLocation() {
+  const keys = Object.keys(spyfallLocations);
+  const key = keys[Math.floor(Math.random() * keys.length)];
+  return { locationKey: key, locationLabel: spyfallLocations[key] };
+}
+
+// All location labels for the Spy's reference list
+const ALL_SPYFALL_LOCATIONS = Object.entries(spyfallLocations).map(
+  ([key, label]) => ({ key, label })
+);
 
 function emitRoomState(code) {
   const room = rooms.get(code);
@@ -146,59 +186,121 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('timer-setting', duration);
   });
 
-  // ── Start Game (Insider) ──
+  // ── Start Game ──
   socket.on('start-game', () => {
     const room = rooms.get(socket.data?.code);
     if (!room || room.dmId !== socket.id) return;
-    if (room.players.length < 4) return socket.emit('error-msg', 'ต้องมีผู้เล่นอย่างน้อย 4 คน');
 
-    const { word, category } = pickWord();
-    room.word = word;
-    room.category = category;
-    room.phase = 'playing';
-    room.timeRemaining = room.timerDuration;
-    room.timerTotal = room.timerDuration;
+    if (room.gameId === 'spyfall') {
+      // ─── Spyfall start ───
+      if (room.players.length < 3) return socket.emit('error-msg', 'ต้องมีผู้เล่นอย่างน้อย 3 คน');
 
-    const nonDM = room.players.filter(p => p.id !== room.dmId);
-    const insiderIdx = Math.floor(Math.random() * nonDM.length);
-    room.insiderId = nonDM[insiderIdx].id;
-    room.insiderName = nonDM[insiderIdx].name;
+      const { locationKey, locationLabel } = pickSpyfallLocation();
+      room.spyfallLocation = locationKey;
+      room.spyfallLocationLabel = locationLabel;
+      room.phase = 'playing';
+      room.timeRemaining = room.timerDuration;
+      room.timerTotal = room.timerDuration;
+      room.spyfallVotes = {};       // voterId → targetId
+      room.spyfallVoteActive = false;
+      room.spyfallVoteCaller = null;
 
-    room.roles = {};
-    room.players.forEach(p => {
-      if (p.id === room.dmId) room.roles[p.id] = 'Master';
-      else if (p.id === room.insiderId) room.roles[p.id] = 'Insider';
-      else room.roles[p.id] = 'Common';
-    });
+      // Pick one random spy (everyone is equal, no DM role in Spyfall)
+      const spyIdx = Math.floor(Math.random() * room.players.length);
+      room.spyId = room.players[spyIdx].id;
+      room.spyName = room.players[spyIdx].name;
 
-    room.players.forEach(p => {
-      const role = room.roles[p.id];
-      const canSee = role === 'Master' || role === 'Insider';
-      io.to(p.id).emit('game-started', {
-        role,
-        category,
-        word: canSee ? word : null,
-        timerTotal: room.timerTotal,
+      room.roles = {};
+      room.players.forEach(p => {
+        room.roles[p.id] = p.id === room.spyId ? 'Spy' : 'Agent';
       });
-    });
 
-    room.timerInterval = setInterval(() => {
-      room.timeRemaining--;
-      io.to(room.code).emit('timer-tick', room.timeRemaining);
-      if (room.timeRemaining <= 0) {
-        clearInterval(room.timerInterval);
-        room.timerInterval = null;
-        room.phase = 'result';
-        io.to(room.code).emit('time-up', {
-          word: room.word,
-          category: room.category,
-          insider: room.insiderName,
-          insiderId: room.insiderId,
-          players: room.players,
-          roles: room.roles,
+      room.players.forEach(p => {
+        const isSpy = p.id === room.spyId;
+        io.to(p.id).emit('game-started', {
+          gameId: 'spyfall',
+          role: room.roles[p.id],
+          location: isSpy ? null : locationLabel,
+          locationKey: isSpy ? null : locationKey,
+          locations: ALL_SPYFALL_LOCATIONS,
+          timerTotal: room.timerTotal,
         });
-      }
-    }, 1000);
+      });
+
+      // Start timer
+      room.timerInterval = setInterval(() => {
+        room.timeRemaining--;
+        io.to(room.code).emit('timer-tick', room.timeRemaining);
+        if (room.timeRemaining <= 0) {
+          clearInterval(room.timerInterval);
+          room.timerInterval = null;
+          room.phase = 'result';
+          io.to(room.code).emit('spyfall-result', {
+            winner: 'spy',
+            reason: 'timeout',
+            spy: room.spyName,
+            spyId: room.spyId,
+            location: room.spyfallLocationLabel,
+            locationKey: room.spyfallLocation,
+            players: room.players,
+            roles: room.roles,
+          });
+        }
+      }, 1000);
+
+    } else {
+      // ─── Insider start ───
+      if (room.players.length < 4) return socket.emit('error-msg', 'ต้องมีผู้เล่นอย่างน้อย 4 คน');
+
+      const { word, category } = pickWord();
+      room.word = word;
+      room.category = category;
+      room.phase = 'playing';
+      room.timeRemaining = room.timerDuration;
+      room.timerTotal = room.timerDuration;
+
+      const nonDM = room.players.filter(p => p.id !== room.dmId);
+      const insiderIdx = Math.floor(Math.random() * nonDM.length);
+      room.insiderId = nonDM[insiderIdx].id;
+      room.insiderName = nonDM[insiderIdx].name;
+
+      room.roles = {};
+      room.players.forEach(p => {
+        if (p.id === room.dmId) room.roles[p.id] = 'Master';
+        else if (p.id === room.insiderId) room.roles[p.id] = 'Insider';
+        else room.roles[p.id] = 'Common';
+      });
+
+      room.players.forEach(p => {
+        const role = room.roles[p.id];
+        const canSee = role === 'Master' || role === 'Insider';
+        io.to(p.id).emit('game-started', {
+          gameId: 'insider',
+          role,
+          category,
+          word: canSee ? word : null,
+          timerTotal: room.timerTotal,
+        });
+      });
+
+      room.timerInterval = setInterval(() => {
+        room.timeRemaining--;
+        io.to(room.code).emit('timer-tick', room.timeRemaining);
+        if (room.timeRemaining <= 0) {
+          clearInterval(room.timerInterval);
+          room.timerInterval = null;
+          room.phase = 'result';
+          io.to(room.code).emit('time-up', {
+            word: room.word,
+            category: room.category,
+            insider: room.insiderName,
+            insiderId: room.insiderId,
+            players: room.players,
+            roles: room.roles,
+          });
+        }
+      }, 1000);
+    }
   });
 
   // ── Guess Correct (DM) ──
@@ -232,6 +334,144 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ══════════════════════════════════════════════
+  //  Spyfall-specific events
+  // ══════════════════════════════════════════════
+
+  // ── Spy guesses the location ──
+  socket.on('spy-guess-location', ({ locationKey }) => {
+    const room = rooms.get(socket.data?.code);
+    if (!room || room.gameId !== 'spyfall' || room.phase !== 'playing') return;
+    if (socket.id !== room.spyId) return;
+
+    if (room.timerInterval) { clearInterval(room.timerInterval); room.timerInterval = null; }
+    room.phase = 'result';
+
+    const correct = locationKey === room.spyfallLocation;
+    io.to(room.code).emit('spyfall-result', {
+      winner: correct ? 'spy' : 'players',
+      reason: correct ? 'spy-guessed-correct' : 'spy-guessed-wrong',
+      spy: room.spyName,
+      spyId: room.spyId,
+      location: room.spyfallLocationLabel,
+      locationKey: room.spyfallLocation,
+      guessedLocation: spyfallLocations[locationKey] || locationKey,
+      guessedLocationKey: locationKey,
+      players: room.players,
+      roles: room.roles,
+    });
+  });
+
+  // ── Any player calls a vote to identify the spy ──
+  socket.on('call-vote', ({ targetId }) => {
+    const room = rooms.get(socket.data?.code);
+    if (!room || room.gameId !== 'spyfall' || room.phase !== 'playing') return;
+    if (room.spyfallVoteActive) return; // already voting
+
+    const target = room.players.find(p => p.id === targetId);
+    if (!target) return;
+
+    room.spyfallVoteActive = true;
+    room.spyfallVoteCaller = socket.id;
+    room.spyfallVoteTarget = targetId;
+    room.spyfallVotes = {};
+    // caller auto-votes yes
+    room.spyfallVotes[socket.id] = true;
+
+    const callerName = room.players.find(p => p.id === socket.id)?.name || '???';
+
+    io.to(room.code).emit('vote-started', {
+      callerId: socket.id,
+      callerName,
+      targetId,
+      targetName: target.name,
+      votes: room.spyfallVotes,
+      totalPlayers: room.players.length,
+    });
+  });
+
+  // ── A player casts their vote ──
+  socket.on('cast-vote', ({ agree }) => {
+    const room = rooms.get(socket.data?.code);
+    if (!room || room.gameId !== 'spyfall' || !room.spyfallVoteActive) return;
+
+    room.spyfallVotes[socket.id] = agree;
+
+    // Broadcast updated votes
+    io.to(room.code).emit('vote-update', {
+      votes: room.spyfallVotes,
+      totalPlayers: room.players.length,
+    });
+
+    // Check if all players voted
+    if (Object.keys(room.spyfallVotes).length >= room.players.length) {
+      const yesCount = Object.values(room.spyfallVotes).filter(Boolean).length;
+      const majority = yesCount > room.players.length / 2;
+
+      if (majority) {
+        // Vote passed — check if target is the spy
+        const targetIsSpy = room.spyfallVoteTarget === room.spyId;
+        if (targetIsSpy) {
+          // Spy caught! But spy gets one last chance to guess
+          if (room.timerInterval) { clearInterval(room.timerInterval); room.timerInterval = null; }
+          room.phase = 'spy-last-chance';
+          room.spyfallVoteActive = false;
+          io.to(room.code).emit('spy-caught', {
+            spyId: room.spyId,
+            spy: room.spyName,
+            locations: ALL_SPYFALL_LOCATIONS,
+          });
+        } else {
+          // Wrong person accused — spy wins
+          if (room.timerInterval) { clearInterval(room.timerInterval); room.timerInterval = null; }
+          room.phase = 'result';
+          room.spyfallVoteActive = false;
+          io.to(room.code).emit('spyfall-result', {
+            winner: 'spy',
+            reason: 'wrong-accusation',
+            accusedId: room.spyfallVoteTarget,
+            accusedName: room.players.find(p => p.id === room.spyfallVoteTarget)?.name,
+            spy: room.spyName,
+            spyId: room.spyId,
+            location: room.spyfallLocationLabel,
+            locationKey: room.spyfallLocation,
+            players: room.players,
+            roles: room.roles,
+          });
+        }
+      } else {
+        // Vote failed — continue playing
+        room.spyfallVoteActive = false;
+        io.to(room.code).emit('vote-failed', {
+          targetId: room.spyfallVoteTarget,
+          targetName: room.players.find(p => p.id === room.spyfallVoteTarget)?.name,
+        });
+      }
+    }
+  });
+
+  // ── Spy's last-chance guess (after being caught by vote) ──
+  socket.on('spy-last-guess', ({ locationKey }) => {
+    const room = rooms.get(socket.data?.code);
+    if (!room || room.gameId !== 'spyfall' || room.phase !== 'spy-last-chance') return;
+    if (socket.id !== room.spyId) return;
+
+    room.phase = 'result';
+    const correct = locationKey === room.spyfallLocation;
+    io.to(room.code).emit('spyfall-result', {
+      winner: correct ? 'spy' : 'players',
+      reason: correct ? 'spy-last-guess-correct' : 'spy-caught',
+      spy: room.spyName,
+      spyId: room.spyId,
+      location: room.spyfallLocationLabel,
+      locationKey: room.spyfallLocation,
+      guessedLocation: spyfallLocations[locationKey] || locationKey,
+      guessedLocationKey: locationKey,
+      players: room.players,
+      roles: room.roles,
+    });
+  });
+
   // ── Play Again (DM) ──
   socket.on('play-again', () => {
     const room = rooms.get(socket.data?.code);
@@ -246,6 +486,13 @@ io.on('connection', (socket) => {
     room.insiderId = null;
     room.insiderName = null;
     room.timeRemaining = 0;
+    // Spyfall reset
+    room.spyId = null;
+    room.spyName = null;
+    room.spyfallLocation = null;
+    room.spyfallLocationLabel = null;
+    room.spyfallVotes = {};
+    room.spyfallVoteActive = false;
 
     io.to(room.code).emit('back-to-lobby', room.players);
   });

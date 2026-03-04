@@ -8,6 +8,10 @@ import Lobby from '@/components/Lobby';
 import Playing from '@/components/Playing';
 import Discussion from '@/components/Discussion';
 import Result from '@/components/Result';
+import SpyfallPlaying from '@/components/SpyfallPlaying';
+import SpyfallVoting from '@/components/SpyfallVoting';
+import SpyfallLastChance from '@/components/SpyfallLastChance';
+import SpyfallResult from '@/components/SpyfallResult';
 
 export default function Page() {
   const [phase, setPhase] = useState('gameSelect');
@@ -25,6 +29,13 @@ export default function Page() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
+  // ── Spyfall-specific state ──
+  const [spyfallLocation, setSpyfallLocation] = useState(null);
+  const [spyfallLocationKey, setSpyfallLocationKey] = useState(null);
+  const [spyfallLocations, setSpyfallLocations] = useState([]);
+  const [spyfallVoteInfo, setSpyfallVoteInfo] = useState(null);
+  const [spyfallLastChance, setSpyfallLastChance] = useState(null);
+
   useEffect(() => {
     socket.on('room-joined', (data) => {
       setRoomCode(data.code);
@@ -39,17 +50,25 @@ export default function Page() {
     socket.on('players-updated', setPlayers);
     socket.on('timer-setting', setTimerSetting);
 
-    socket.on('game-started', ({ role, category, word, timerTotal: total }) => {
-      setMyRole(role);
-      setCategory(category);
-      setWord(word);
-      setTimerTotal(total);
-      setTimeRemaining(total);
+    socket.on('game-started', (data) => {
+      setMyRole(data.role);
+      setTimerTotal(data.timerTotal);
+      setTimeRemaining(data.timerTotal);
       setPhase('playing');
+
+      if (data.gameId === 'spyfall') {
+        setSpyfallLocation(data.location);
+        setSpyfallLocationKey(data.locationKey);
+        setSpyfallLocations(data.locations || []);
+      } else {
+        setCategory(data.category);
+        setWord(data.word);
+      }
     });
 
     socket.on('timer-tick', setTimeRemaining);
 
+    // ── Insider events ──
     socket.on('word-revealed', (data) => {
       setWord(data.word);
       setCategory(data.category);
@@ -67,12 +86,43 @@ export default function Page() {
       setPhase('result');
     });
 
+    // ── Spyfall events ──
+    socket.on('vote-started', (data) => {
+      setSpyfallVoteInfo(data);
+      setPhase('spyfall-voting');
+    });
+
+    socket.on('vote-update', (data) => {
+      setSpyfallVoteInfo(prev => prev ? { ...prev, votes: data.votes, totalPlayers: data.totalPlayers } : prev);
+    });
+
+    socket.on('vote-failed', (data) => {
+      setSpyfallVoteInfo(null);
+      setPhase('playing');
+    });
+
+    socket.on('spy-caught', (data) => {
+      setSpyfallLastChance(data);
+      setPhase('spyfall-last-chance');
+    });
+
+    socket.on('spyfall-result', (data) => {
+      setResult(data);
+      setPhase('spyfall-result');
+    });
+
+    // ── Common events ──
     socket.on('back-to-lobby', (p) => {
       setPlayers(p);
       setMyRole(null);
       setWord(null);
       setCategory(null);
       setResult(null);
+      setSpyfallLocation(null);
+      setSpyfallLocationKey(null);
+      setSpyfallLocations([]);
+      setSpyfallVoteInfo(null);
+      setSpyfallLastChance(null);
       setPhase('lobby');
     });
 
@@ -100,6 +150,11 @@ export default function Page() {
     setTimeRemaining(300);
     setResult(null);
     setError('');
+    setSpyfallLocation(null);
+    setSpyfallLocationKey(null);
+    setSpyfallLocations([]);
+    setSpyfallVoteInfo(null);
+    setSpyfallLastChance(null);
   }
 
   function handleSelectGame(id) {
@@ -122,6 +177,7 @@ export default function Page() {
     socket.emit('set-timer', d);
   }
 
+  const isSpyfall = gameId === 'spyfall';
   const shared = { isDM, players, word, category, error, roomCode, playerName };
 
   return (
@@ -161,7 +217,9 @@ export default function Page() {
             onStartGame={() => socket.emit('start-game')}
           />
         )}
-        {phase === 'playing' && (
+
+        {/* ── Insider phases ── */}
+        {phase === 'playing' && !isSpyfall && (
           <Playing
             {...shared}
             role={myRole}
@@ -177,10 +235,50 @@ export default function Page() {
             onRevealInsider={() => socket.emit('reveal-insider')}
           />
         )}
-        {phase === 'result' && (
+        {phase === 'result' && !isSpyfall && (
           <Result
             {...shared}
             result={result}
+            myRole={myRole}
+            onPlayAgain={() => socket.emit('play-again')}
+          />
+        )}
+
+        {/* ── Spyfall phases ── */}
+        {phase === 'playing' && isSpyfall && (
+          <SpyfallPlaying
+            role={myRole}
+            location={spyfallLocation}
+            locationKey={spyfallLocationKey}
+            locations={spyfallLocations}
+            timerTotal={timerTotal}
+            timeRemaining={timeRemaining}
+            players={players}
+            myId={socket.id}
+            onCallVote={(targetId) => socket.emit('call-vote', { targetId })}
+            onSpyGuess={(locationKey) => socket.emit('spy-guess-location', { locationKey })}
+          />
+        )}
+        {phase === 'spyfall-voting' && (
+          <SpyfallVoting
+            voteInfo={spyfallVoteInfo}
+            players={players}
+            myId={socket.id}
+            onCastVote={(agree) => socket.emit('cast-vote', { agree })}
+          />
+        )}
+        {phase === 'spyfall-last-chance' && (
+          <SpyfallLastChance
+            spy={spyfallLastChance?.spy}
+            locations={spyfallLastChance?.locations || spyfallLocations}
+            isSpy={myRole === 'Spy'}
+            onLastGuess={(locationKey) => socket.emit('spy-last-guess', { locationKey })}
+          />
+        )}
+        {phase === 'spyfall-result' && (
+          <SpyfallResult
+            result={result}
+            isDM={isDM}
             myRole={myRole}
             onPlayAgain={() => socket.emit('play-again')}
           />

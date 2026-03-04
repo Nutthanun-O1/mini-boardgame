@@ -26,7 +26,7 @@ const GAMES = [
     description: 'หาตัวสายลับที่ไม่รู้ว่าอยู่ที่ไหน',
     players: '4 – 8 คน',
     duration: '10 นาที',
-    available: false,
+    available: true,
   },
   {
     id: 'codenames',
