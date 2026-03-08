@@ -6,7 +6,7 @@ import Timer from './Timer';
 import { ROLE_IMAGES, ROLE_INFO } from '@/lib/images';
 import AnimatedPage, { tapScale, popIn } from './AnimatedPage';
 
-export default function Playing({ role, word, category, timerTotal, timeRemaining, isDM, onGuessCorrect }) {
+export default function Playing({ role, word, category, timerTotal, timeRemaining, timerPaused, isDM, onPauseTimer, onResumeTimer, onGuessCorrect }) {
   const [showRole, setShowRole] = useState(false);
   const [confirmGuess, setConfirmGuess] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -17,7 +17,7 @@ export default function Playing({ role, word, category, timerTotal, timeRemainin
 
   return (
     <AnimatedPage>
-      <Timer total={timerTotal} remaining={timeRemaining} />
+      <Timer total={timerTotal} remaining={timeRemaining} paused={timerPaused} />
 
       <motion.div className="role-card" variants={popIn} initial="hidden" animate="visible">
         <AnimatePresence mode="wait">
@@ -93,6 +93,14 @@ export default function Playing({ role, word, category, timerTotal, timeRemainin
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
+          <motion.button
+            className={`btn btn--lg ${timerPaused ? 'btn--accent' : 'btn--secondary'}`}
+            onClick={timerPaused ? onResumeTimer : onPauseTimer}
+            whileTap={tapScale}
+          >
+            {timerPaused ? '▶ เล่นต่อ' : '⏸ หยุดเวลา'}
+          </motion.button>
+
           <AnimatePresence mode="wait">
             {!confirmGuess ? (
               <motion.button

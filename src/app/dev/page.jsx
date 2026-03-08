@@ -418,6 +418,9 @@ export default function DevPage() {
               role={role}
               timerTotal={timerSetting}
               timeRemaining={timer}
+              timerPaused={false}
+              onPauseTimer={() => {}}
+              onResumeTimer={() => {}}
               onGuessCorrect={() => setPhase('discussion')}
             />
           )}
@@ -453,8 +456,12 @@ export default function DevPage() {
               locations={MOCK_LOCATIONS}
               timerTotal={timerSetting}
               timeRemaining={timer}
+              timerPaused={false}
               players={MOCK_PLAYERS}
               myId="1"
+              isDM={shared.isDM}
+              onPauseTimer={() => {}}
+              onResumeTimer={() => {}}
               onCallVote={() => setPhase('spyfall-voting')}
               onSpyGuess={() => setPhase('spyfall-result')}
             />

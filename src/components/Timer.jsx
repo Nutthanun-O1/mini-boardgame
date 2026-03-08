@@ -1,15 +1,15 @@
 'use client';
 
-export default function Timer({ total, remaining }) {
+export default function Timer({ total, remaining, paused }) {
   const progress = total > 0 ? remaining / total : 0;
-  const isLow = remaining <= 30;
+  const isLow = remaining <= 30 && !paused;
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
 
   return (
-    <div className={`timer ${isLow ? 'timer--low' : ''}`}>
+    <div className={`timer ${isLow ? 'timer--low' : ''} ${paused ? 'timer--paused' : ''}`}>
       <span className="timer__display">
-        {minutes}:{String(seconds).padStart(2, '0')}
+        {paused && '⏸ '}{minutes}:{String(seconds).padStart(2, '0')}
       </span>
       <div className="timer__track">
         <div

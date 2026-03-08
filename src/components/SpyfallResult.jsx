@@ -113,20 +113,11 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
         </motion.ul>
       </motion.div>
 
-      {isDM ? (
-        <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-          <motion.button className="btn btn--primary btn--lg" onClick={onPlayAgain} whileTap={tapScale}>
-            เล่นรอบใหม่
-          </motion.button>
-        </motion.div>
-      ) : (
-        <div className="waiting-state">
-          <span className="waiting-dot" />
-          <span className="waiting-dot" />
-          <span className="waiting-dot" />
-          <p>รอ DM เริ่มรอบใหม่</p>
-        </div>
-      )}
+      <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+        <motion.button className="btn btn--primary btn--lg" onClick={onPlayAgain} whileTap={tapScale}>
+          เล่นรอบใหม่
+        </motion.button>
+      </motion.div>
     </AnimatedPage>
   );
 }

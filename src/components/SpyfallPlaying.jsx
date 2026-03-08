@@ -14,8 +14,12 @@ export default function SpyfallPlaying({
   locations,
   timerTotal,
   timeRemaining,
+  timerPaused,
   players,
   myId,
+  isDM,
+  onPauseTimer,
+  onResumeTimer,
   onCallVote,
   onSpyGuess,
 }) {
@@ -34,7 +38,7 @@ export default function SpyfallPlaying({
 
   return (
     <AnimatedPage>
-      <Timer total={timerTotal} remaining={timeRemaining} />
+      <Timer total={timerTotal} remaining={timeRemaining} paused={timerPaused} />
 
       {/* ── Role Card ── */}
       <motion.div className={`role-card ${modifier}`} variants={popIn} initial="hidden" animate="visible">
@@ -107,6 +111,17 @@ export default function SpyfallPlaying({
 
       {/* ── Actions ── */}
       <motion.div className="bottom-actions spyfall-actions" variants={fadeUpItem} initial="hidden" animate="visible">
+        {/* DM: pause/resume timer */}
+        {isDM && (
+          <motion.button
+            className={`btn btn--lg ${timerPaused ? 'btn--accent' : 'btn--secondary'}`}
+            whileTap={tapScale}
+            onClick={timerPaused ? onResumeTimer : onPauseTimer}
+          >
+            {timerPaused ? '▶ เล่นต่อ' : '⏸ หยุดเวลา'}
+          </motion.button>
+        )}
+
         {/* Spy: guess location */}
         {isSpy && !guessMode && (
           <motion.button className="btn btn--danger btn--lg" whileTap={tapScale} onClick={() => setGuessMode(true)}>

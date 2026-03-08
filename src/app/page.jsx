@@ -253,6 +253,12 @@ export default function Page() {
 
     if (!timerStartedAt) return;
 
+    // Paused: negative value encodes remaining milliseconds
+    if (timerStartedAt < 0) {
+      setTimeRemaining(Math.round(Math.abs(timerStartedAt) / 1000));
+      return;
+    }
+
     const tick = () => {
       const elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
       const remaining = Math.max(0, timerTotal - elapsed);
@@ -478,6 +484,28 @@ export default function Page() {
       .eq('code', code);
   }
 
+  async function handlePauseTimer() {
+    const room = roomRef.current;
+    if (!room || !room.timer_started_at || room.timer_started_at < 0) return;
+    const code = roomCodeRef.current;
+    const elapsed = Date.now() - room.timer_started_at;
+    const remainingMs = Math.max(0, room.timer_duration * 1000 - elapsed);
+    await getSupabase().from('rooms').update({
+      timer_started_at: -remainingMs,
+    }).eq('code', code);
+  }
+
+  async function handleResumeTimer() {
+    const room = roomRef.current;
+    if (!room || !room.timer_started_at || room.timer_started_at > 0) return;
+    const code = roomCodeRef.current;
+    const remainingMs = Math.abs(room.timer_started_at);
+    const newStart = Date.now() - (room.timer_duration * 1000 - remainingMs);
+    await getSupabase().from('rooms').update({
+      timer_started_at: newStart,
+    }).eq('code', code);
+  }
+
   async function handleSetDifficulty(val) {
     const code = roomCodeRef.current;
     setDifficulty(val);
@@ -505,8 +533,8 @@ export default function Page() {
   /**
    * Determine who the DM should be based on dm_mode setting.
    */
-  function resolveDM(pls, room) {
-    const mode = room.dm_mode || 'creator';
+  function resolveDM(pls) {
+    const mode = dmMode || 'creator';
     if (mode === 'creator') {
       return pls.find(p => p.isDM) || pls[0];
     }
@@ -553,7 +581,7 @@ export default function Page() {
       if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
 
       const diff = room.difficulty || 'medium';
-      const dmPlayer = resolveDM(pls, room);
+      const dmPlayer = resolveDM(pls);
       const nonDM = pls.filter(p => p.id !== dmPlayer.id);
       const insiderIdx = Math.floor(Math.random() * nonDM.length);
       const insiderPlayer = nonDM[insiderIdx];
@@ -625,7 +653,13 @@ export default function Page() {
     const room = roomRef.current;
     if (!room) return;
     const code = roomCodeRef.current;
-    const elapsed = Math.floor((Date.now() - room.timer_started_at) / 1000);
+    // Handle paused timer: negative value means remaining ms
+    let elapsed;
+    if (room.timer_started_at < 0) {
+      elapsed = room.timer_duration - Math.round(Math.abs(room.timer_started_at) / 1000);
+    } else {
+      elapsed = Math.floor((Date.now() - room.timer_started_at) / 1000);
+    }
 
     await getSupabase().from('rooms').update({
       phase: 'discussion',
@@ -776,7 +810,7 @@ export default function Page() {
     if (!code) { setError('ไม่พบรหัสห้อง'); return; }
 
     try {
-      // Reset DM flags in players table — make current user the DM
+      // Reset DM flags in players table — whoever presses becomes DM
       await getSupabase().from('players')
         .update({ is_dm: false })
         .eq('room_code', code);
@@ -806,7 +840,18 @@ export default function Page() {
         return;
       }
 
-      // Force re-fetch to catch up in case Realtime missed the update
+      // Force local state transition immediately (don't rely solely on Realtime)
+      setIsDM(true);
+      isDMRef.current = true;
+      setPhase('lobby');
+      setMyRole(null);
+      setWord(null);
+      setCategory(null);
+      setResult(null);
+      setTimerStartedAt(null);
+      setError('');
+
+      // Also re-fetch to ensure full sync
       await fetchRoom(code);
       await fetchPlayers(code);
     } catch (err) {
@@ -831,6 +876,7 @@ export default function Page() {
   //  Render
   // ══════════════════════════════════════════════
   const isSpyfall = gameId === 'spyfall';
+  const timerPaused = timerStartedAt !== null && timerStartedAt < 0;
   const shared = { isDM, players, word, category, error, roomCode, playerName };
 
   // Compute vote info with player names
@@ -907,6 +953,9 @@ export default function Page() {
             role={myRole}
             timerTotal={timerTotal}
             timeRemaining={timeRemaining}
+            timerPaused={timerPaused}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onGuessCorrect={handleGuessCorrect}
           />
         )}
@@ -938,8 +987,12 @@ export default function Page() {
             locations={spyfallLocations}
             timerTotal={timerTotal}
             timeRemaining={timeRemaining}
+            timerPaused={timerPaused}
             players={players}
             myId={myId.current}
+            isDM={isDM}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onCallVote={handleCallVote}
             onSpyGuess={handleSpyGuessLocation}
           />

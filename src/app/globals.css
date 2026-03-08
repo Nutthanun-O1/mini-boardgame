@@ -248,6 +248,12 @@ body {
   background: var(--color-danger);
   border-color: var(--color-danger);
 }
+
+.btn--accent {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.btn--accent:hover:not(:disabled) { background: var(--color-accent-hover); }
 .btn--danger:hover:not(:disabled) { background: var(--color-danger-hover); }
 
 .btn--ghost {
@@ -676,6 +682,16 @@ select.field__input {
 
 .timer--low .timer__fill {
   background: var(--color-danger);
+}
+
+.timer--paused .timer__display {
+  color: var(--color-warning);
+  animation: pulse 2s infinite;
+}
+
+.timer--paused .timer__fill {
+  background: var(--color-warning);
+  animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
