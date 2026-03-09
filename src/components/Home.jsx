@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, getSessionName, saveSessionName } from '@/lib/supabase';
 import AnimatedPage, { staggerContainer, fadeUpItem, tapScale } from './AnimatedPage';
 
 const GAME_TITLES = { insider: 'Insider', werewolf: 'Werewolf', spyfall: 'Spyfall', codenames: 'Codenames' };
 
 export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => getSessionName());
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
 
   const title = GAME_TITLES[gameId] || gameId;
 
@@ -102,8 +103,8 @@ export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }
             type="text"
             placeholder="ใส่ชื่อก่อนเข้าร่วมหรือสร้างห้อง"
             value={name}
-            onChange={e => setName(e.target.value)}
-            maxLength={20}
+            onChange={e => { setName(e.target.value); saveSessionName(e.target.value); }}
+            maxLength={100}
             autoFocus
           />
         </div>
@@ -122,15 +123,39 @@ export default function Home({ gameId, onCreateRoom, onJoinRoom, onBack, error }
         <div className="room-browse">
           <div className="room-browse__header">
             <span className="room-browse__title">ห้องที่เปิดอยู่</span>
-            <motion.button
-              className="room-browse__refresh"
-              onClick={fetchRooms}
-              whileTap={{ scale: 0.9, rotate: 180 }}
-              transition={{ duration: 0.3 }}
-              title="รีเฟรช"
-            >
-              ↻
-            </motion.button>
+            <div className="room-browse__header-actions">
+              {rooms.length > 0 && (
+                <motion.button
+                  className="room-browse__clear"
+                  onClick={async () => {
+                    if (clearing) return;
+                    setClearing(true);
+                    try {
+                      const supabase = getSupabase();
+                      const codes = rooms.map(r => r.code);
+                      // Delete players first, then rooms
+                      await supabase.from('players').delete().in('room_code', codes);
+                      await supabase.from('rooms').delete().in('code', codes);
+                      await fetchRooms();
+                    } catch { /* ignore */ }
+                    setClearing(false);
+                  }}
+                  whileTap={{ scale: 0.9 }}
+                  title="ลบห้องทั้งหมด"
+                >
+                  {clearing ? '...' : '🗑️'}
+                </motion.button>
+              )}
+              <motion.button
+                className="room-browse__refresh"
+                onClick={fetchRooms}
+                whileTap={{ scale: 0.9, rotate: 180 }}
+                transition={{ duration: 0.3 }}
+                title="รีเฟรช"
+              >
+                ↻
+              </motion.button>
+            </div>
           </div>
 
           {loading ? (

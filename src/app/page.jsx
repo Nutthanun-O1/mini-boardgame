@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSession } from '@/lib/supabase';
+import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSession, saveSessionName } from '@/lib/supabase';
 import {
   generateRoomCode, pickWord, pickWordChoices, pickSpyfallLocation,
   ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
@@ -49,6 +49,10 @@ export default function Page() {
   const [spyfallLocations, setSpyfallLocations] = useState([]);
   const [spyfallVoteInfo, setSpyfallVoteInfo] = useState(null);
   const [spyfallLastChance, setSpyfallLastChance] = useState(null);
+
+  // ── Auto-return-to-lobby countdown ──
+  const [countdown, setCountdown] = useState(null);
+  const countdownRef = useRef(null);
 
   // ── Refs (for latest values inside intervals / callbacks) ──
   const myId = useRef(null);
@@ -287,6 +291,43 @@ export default function Page() {
   }, [timerStartedAt, timerTotal]);
 
   // ══════════════════════════════════════════════
+  //  Auto-return-to-lobby countdown (result → lobby after 3s)
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    // Clear any existing countdown
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+
+    const isResultPhase = phase === 'result' || phase === 'spyfall-result';
+    if (!isResultPhase) { setCountdown(null); return; }
+
+    let remaining = 3;
+    setCountdown(remaining);
+
+    countdownRef.current = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        // Only DM pushes the lobby reset to DB
+        if (isDMRef.current) {
+          handlePlayAgain();
+        }
+      }
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [phase]);
+
+  // ══════════════════════════════════════════════
   //  Visibility change — re-fetch room state when user comes back
   // ══════════════════════════════════════════════
   useEffect(() => {
@@ -371,10 +412,15 @@ export default function Page() {
   }
 
   function doResetAll() {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    setCountdown(null);
     setPhase('gameSelect');
     setGameId(null);
     setRoomCode('');
-    setPlayerName('');
+    // Keep playerName for session persistence
     setIsDM(false);
     setPlayers([]);
     setMyRole(null);
@@ -393,6 +439,7 @@ export default function Page() {
     setSpyfallLastChance(null);
     setWordChoices(null);
     roomRef.current = null;
+    roomCodeRef.current = '';
     timeUpFiredRef.current = false;
     clearRoomSession();
   }
@@ -428,6 +475,7 @@ export default function Page() {
       setTimerSetting(duration || 300);
       setRoomCode(code); // triggers realtime subscription
       setPhase('lobby');
+      saveSessionName(name);
       saveRoomSession({ roomCode: code, playerName: name });
     } catch (err) {
       setError(err.message || 'เกิดข้อผิดพลาด');
@@ -470,6 +518,7 @@ export default function Page() {
       setTimerSetting(room.timer_duration);
       setRoomCode(code); // triggers realtime subscription
       setPhase('lobby');
+      saveSessionName(name);
       saveRoomSession({ roomCode: code, playerName: name });
     } catch (err) {
       setError(err.message || 'เกิดข้อผิดพลาด');
@@ -482,6 +531,28 @@ export default function Page() {
     await getSupabase().from('rooms')
       .update({ timer_duration: duration })
       .eq('code', code);
+  }
+
+  async function handleChangeName(newName) {
+    const pid = myId.current;
+    const code = roomCodeRef.current;
+    if (!code || !newName) return;
+
+    // Check for name collision
+    const { data: nameExists } = await getSupabase()
+      .from('players').select('name').eq('room_code', code).eq('name', newName);
+    if (nameExists && nameExists.length > 0) { setError('ชื่อนี้ถูกใช้แล้ว'); return; }
+
+    await getSupabase().from('players')
+      .update({ name: newName })
+      .eq('room_code', code).eq('id', pid);
+
+    setPlayerName(newName);
+    saveSessionName(newName);
+    saveRoomSession({ roomCode: code, playerName: newName });
+    setError('');
+    // Re-fetch players to update the list
+    await fetchPlayers(code);
   }
 
   async function handlePauseTimer() {
@@ -932,6 +1003,7 @@ export default function Page() {
             onSetDmMode={handleSetDmMode}
             onSetWordPick={handleSetWordPick}
             onStartGame={handleStartGame}
+            onChangeName={handleChangeName}
           />
         )}
 
@@ -973,7 +1045,7 @@ export default function Page() {
             {...shared}
             result={result}
             myRole={myRole}
-            onPlayAgain={handlePlayAgain}
+            countdown={countdown}
           />
         )}
 
@@ -1021,7 +1093,7 @@ export default function Page() {
             result={result}
             isDM={isDM}
             myRole={myRole}
-            onPlayAgain={handlePlayAgain}
+            countdown={countdown}
           />
         )}
         </AnimatePresence>

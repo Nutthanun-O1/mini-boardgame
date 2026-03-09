@@ -15,7 +15,7 @@ const REASON_TEXT = {
   'wrong-accusation':      'โหวตผิดคน — Spy ชนะ!',
 };
 
-export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
+export default function SpyfallResult({ result, isDM, myRole, countdown }) {
   if (!result) return null;
 
   const {
@@ -114,9 +114,13 @@ export default function SpyfallResult({ result, isDM, myRole, onPlayAgain }) {
       </motion.div>
 
       <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-        <motion.button className="btn btn--primary btn--lg" onClick={onPlayAgain} whileTap={tapScale}>
-          เล่นรอบใหม่
-        </motion.button>
+        <div className="countdown-banner">
+          <p className="countdown-banner__text">
+            {countdown != null && countdown > 0
+              ? `กลับห้องล็อบบี้ใน ${countdown} วินาที...`
+              : 'กำลังกลับห้องล็อบบี้...'}
+          </p>
+        </div>
       </motion.div>
     </AnimatedPage>
   );

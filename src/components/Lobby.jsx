@@ -1,16 +1,19 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
 export default function Lobby({
   roomCode, players, isDM, timerSetting, gameId,
-  difficulty, dmMode, wordPick,
+  difficulty, dmMode, wordPick, playerName,
   onSetTimer, onSetDifficulty, onSetDmMode, onSetWordPick,
-  onStartGame, error
+  onStartGame, onChangeName, error
 }) {
   const isInsider = gameId === 'insider';
   const minPlayers = isInsider ? 4 : 3;
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState(playerName || '');
 
   return (
     <AnimatedPage>
@@ -18,6 +21,48 @@ export default function Lobby({
         <p className="room-code-label">รหัสห้อง</p>
         <p className="room-code-value">{roomCode}</p>
         <p className="room-code-hint">แชร์รหัสนี้ให้เพื่อน</p>
+      </motion.div>
+
+      {/* ── Editable name ── */}
+      <motion.div className="lobby-name-edit" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.25 }}>
+        <AnimatePresence mode="wait">
+          {!editingName ? (
+            <motion.div key="display" className="lobby-name-edit__row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <span className="lobby-name-edit__label">ชื่อของคุณ:</span>
+              <span className="lobby-name-edit__value">{playerName}</span>
+              <motion.button className="lobby-name-edit__btn" onClick={() => { setNewName(playerName); setEditingName(true); }} whileTap={tapScale}>
+                ✏️
+              </motion.button>
+            </motion.div>
+          ) : (
+            <motion.div key="edit" className="lobby-name-edit__row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <input
+                className="field__input lobby-name-edit__input"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                maxLength={100}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newName.trim()) {
+                    onChangeName(newName.trim());
+                    setEditingName(false);
+                  }
+                }}
+              />
+              <motion.button
+                className="btn btn--sm btn--primary"
+                disabled={!newName.trim() || newName.trim() === playerName}
+                onClick={() => { if (newName.trim()) { onChangeName(newName.trim()); setEditingName(false); } }}
+                whileTap={tapScale}
+              >
+                บันทึก
+              </motion.button>
+              <motion.button className="btn btn--sm btn--secondary" onClick={() => setEditingName(false)} whileTap={tapScale}>
+                ยกเลิก
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       <motion.div className="card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>

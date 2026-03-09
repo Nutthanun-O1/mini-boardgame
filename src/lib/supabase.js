@@ -65,3 +65,19 @@ export function clearRoomSession() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(ROOM_KEY);
 }
+
+// ── Session name persistence ──
+
+const NAME_KEY = 'boardgame_session_name';
+
+/** Save display name for this session so the user doesn't re-type it. */
+export function saveSessionName(name) {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(NAME_KEY, name);
+}
+
+/** Load saved session name (returns '' if none). */
+export function getSessionName() {
+  if (typeof window === 'undefined') return '';
+  return sessionStorage.getItem(NAME_KEY) || '';
+}

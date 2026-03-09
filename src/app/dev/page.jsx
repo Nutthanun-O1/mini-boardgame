@@ -392,6 +392,7 @@ export default function DevPage() {
                 resetTimer();
                 setPhase(wordPick && !isSpyfall ? 'word-pick' : 'playing');
               }}
+              onChangeName={() => {}}
             />
           )}
 
@@ -442,7 +443,7 @@ export default function DevPage() {
               {...shared}
               result={mockInsiderResult}
               myRole={role}
-              onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
+              countdown={3}
             />
           )}
 
@@ -496,7 +497,7 @@ export default function DevPage() {
               result={mockSpyfallResult}
               isDM={isDM}
               myRole={role}
-              onPlayAgain={() => { resetTimer(); setPhase('playing'); }}
+              countdown={3}
             />
           )}
         </AnimatePresence>

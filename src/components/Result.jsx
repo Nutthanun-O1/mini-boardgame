@@ -5,7 +5,7 @@ import FallbackImage from './FallbackImage';
 import { ROLE_IMAGES } from '@/lib/images';
 import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
-export default function Result({ result, word, category, isDM, myRole, onPlayAgain }) {
+export default function Result({ result, word, category, isDM, myRole, countdown }) {
   const isTimedOut = result?.timedOut;
   const gamePlayers = result?.players || result?.gamePlayers || [];
   const roles = result?.roles || {};
@@ -70,9 +70,13 @@ export default function Result({ result, word, category, isDM, myRole, onPlayAga
       </motion.div>
 
       <motion.div className="bottom-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.35 }}>
-        <motion.button className="btn btn--primary btn--lg" onClick={onPlayAgain} whileTap={tapScale}>
-          เล่นรอบใหม่
-        </motion.button>
+        <div className="countdown-banner">
+          <p className="countdown-banner__text">
+            {countdown != null && countdown > 0
+              ? `กลับห้องล็อบบี้ใน ${countdown} วินาที...`
+              : 'กำลังกลับห้องล็อบบี้...'}
+          </p>
+        </div>
       </motion.div>
     </AnimatedPage>
   );
