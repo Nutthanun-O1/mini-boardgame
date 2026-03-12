@@ -1,208 +1,83 @@
 /**
  * Game data — word banks, locations, and helper functions.
- * (Moved from server.js so the client can handle game logic directly.)
  */
-
+import { createClient } from '@supabase/supabase-js';
 import { getSupabase } from './supabase';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey)
+
 
 // ══════════════════════════════════════════════
 //  Insider word bank — by difficulty
 // ══════════════════════════════════════════════
 
-/**
- * ง่าย: คำที่คนทั่วไปรู้จักดี ตอบ Yes/No ง่าย
- */
-const easyWords = {
-  animals: [
-    'แมว','สุนัข','ช้าง','ม้า','กระต่าย','ปลา','นก',
-    'ลิง','งู','หมู','วัว','ไก่','เป็ด','กบ','เต่า',
-    'แมลง','หนู','ปู','กุ้ง','หอย','นกพิราบ','ปลาทอง',
-    'มด','ยุง','แมลงปอ','หนอน','ผึ้ง','แมงกะพรุน','ปลาการ์ตูน','หิ่งห้อย',
-  ],
-  food: [
-    'ข้าว','ไข่','นม','น้ำ','ขนมปัง','เค้ก','พิซซ่า',
-    'ไอศกรีม','ผัดไทย','ส้มตำ','กล้วย','แตงโม','มะม่วง',
-    'ช็อกโกแลต','แฮมเบอร์เกอร์','บะหมี่','ข้าวเหนียว','มะละกอ',
-    'เต้าหู้','ลูกชิ้น','แซนด์วิช','ป๊อปคอร์น','องุ่น','สับปะรด',
-    'ส้ม','เงาะ','ลำไย','ขนมจีน','ก๋วยเตี๋ยว','ขนมครก',
-  ],
-  objects: [
-    'โทรศัพท์','นาฬิกา','กุญแจ','ร่ม','แว่นตา','กระเป๋า',
-    'หมอน','ดินสอ','กรรไกร','กระจก','พัดลม','เก้าอี้',
-    'โต๊ะ','ประตู','รองเท้า','ผ้าขนหนู','หวี','สบู่',
-    'แปรงสีฟัน','ถุงเท้า','หมวก','เสื้อ','กางเกง','ผ้าห่ม',
-    'ถ้วย','จาน','ช้อน','ส้อม','ขวดน้ำ','ปากกา',
-  ],
-  places: [
-    'บ้าน','ตลาด','สวนสาธารณะ','ห้างสรรพสินค้า',
-    'ห้องสมุด','โรงภาพยนตร์','สระว่ายน้ำ','สถานีรถไฟ',
-    'ร้านสะดวกซื้อ','ปั๊มน้ำมัน','ร้านตัดผม','ร้านกาแฟ',
-    'สนามฟุตบอล','โรงยิม','สนามเด็กเล่น','ไปรษณีย์',
-    'ร้านซักผ้า','ตลาดนัด','ร้านหนังสือ','ลานจอดรถ',
-  ],
-  vehicles: [
-    'รถยนต์','รถบัส','รถไฟฟ้า','เครื่องบิน','เรือ','จักรยาน',
-    'รถมอเตอร์ไซค์','สามล้อ','รถแท็กซี่','รถตู้','รถพยาบาล',
-    'รถดับเพลิง','เฮลิคอปเตอร์','รถบรรทุก','เรือแคนู','รถเมล์',
-  ],
-  bodyParts: [
-    'มือ','เท้า','ตา','หู','จมูก','ปาก','ฟัน',
-    'ลิ้น','นิ้ว','หัวเข่า','ข้อศอก','ไหล่','คาง','คิ้ว','แก้ม',
-  ],
-};
+// 1. ดึงข้อมูลทั้งหมดจากตาราง words เหมียว (เพิ่มดักจับ Error เพื่อไม่ให้ค้างเหมียว)
+let allWords = [];
+try {
+  const { data: responseData, error: fetchError } = await supabase
+  .from('words')
+  .select('word, difficulty, category');
 
-/**
- * ปานกลาง: คำที่รู้จักแต่ต้องคิดหน่อย
- */
-const mediumWords = {
-  animals: [
-    'เสือ','สิงโต','เพนกวิน','ปลาโลมา','นกแก้ว','จระเข้',
-    'ยีราฟ','หมี','แมงมุม','ผีเสื้อ','ปลาหมึก','แมวน้ำ',
-    'นกฮูก','ม้าลาย','กวาง','ฮิปโป','อีกัว','แรด','กอริลลา',
-    'นากทะเล','ชิมแปนซี','นกกระจอกเทศ','ตัวกิ้งก่า','หมาป่า',
-    'พะยูน','นกยูง','กิ้งก่า','อูฐ','ตุ่น','แพนด้า',
-  ],
-  food: [
-    'ต้มยำกุ้ง','ซูชิ','สเต็ก','ราเมน','มะพร้าว','ทุเรียน',
-    'กุ้งเผา','ข้าวมันไก่','โดนัท','วาฟเฟิล','มักกะโรนี',
-    'ติ่มซำ','เครป','ทาโก้','ข้าวซอย','ลาบ','น้ำพริกอ่อง',
-    'แกงเขียวหวาน','พะแนง','มัสมั่น','แกงส้ม','ยำวุ้นเส้น',
-    'ข้าวผัด','หมูสะเต๊ะ','หมูกระทะ','ชาบู','บิงซู',
-    'ครัวซองต์','แพนเค้ก','บราวนี่',
-  ],
-  objects: [
-    'เทียน','ลูกโป่ง','ไฟฉาย','กล้องถ่ายรูป','กีตาร์',
-    'กระบอกโทรศัพท์','ว่าว','เข็มทิศ','กล้องส่องทางไกล','เชือก',
-    'ตะเกียง','ลูกบาศก์','กล่องดนตรี','ไม้ขีดไฟ','หน้ากาก',
-    'กล้องจุลทรรศน์','เปียโน','กลอง','ขลุ่ย','กล่องเครื่องมือ',
-    'แม่กุญแจ','โคมไฟ','ลูกโลก','หมากรุก','ไพ่','ลูกเต๋า',
-    'แว่นขยาย','กระดาษ','สมุด','โปสการ์ด',
-  ],
-  activities: [
-    'ว่ายน้ำ','ร้องเพลง','ทำอาหาร','วาดรูป','เต้นรำ',
-    'ตกปลา','ปีนเขา','ถ่ายรูป','เล่นเกม','ช้อปปิ้ง',
-    'แคมป์ปิ้ง','ดำน้ำ','โยคะ','ปั่นจักรยาน','สเก็ตบอร์ด',
-    'เล่นว่าว','เล่นหมากรุก','อ่านหนังสือ','ดูหนัง','ร้องคาราโอเกะ',
-    'เล่นกีฬา','วิ่ง','ต่อจิ๊กซอว์','เล่นบอร์ดเกม','ปลูกต้นไม้',
-    'ทำสวน','เล่นเซิร์ฟ','พายเรือ','กระโดดร่ม','เล่นโบว์ลิ่ง',
-  ],
-  occupations: [
-    'หมอ','ครู','ตำรวจ','นักบิน','พ่อครัว',
-    'นักดับเพลิง','ทนายความ','วิศวกร','ชาวนา','ช่างภาพ',
-    'สัตวแพทย์','จิตรกร','นักดนตรี','นักเขียน','พยาบาล',
-    'นักแสดง','ผู้กำกับ','นักข่าว','บาร์เทนเดอร์','ช่างตัดผม',
-    'เภสัชกร','นักบัญชี','สถาปนิก','นักออกแบบ','โปรแกรมเมอร์',
-    'ยูทูปเบอร์','นักกีฬา','กัปตันเรือ','มัคคุเทศก์','ดีเจ',
-  ],
-  nature: [
-    'ภูเขา','แม่น้ำ','ทะเล','น้ำตก','ถ้ำ','ทะเลทราย',
-    'ป่า','เกาะ','ภูเขาไฟ','ธารน้ำแข็ง','ปะการัง','หุบเขา',
-    'ทุ่งหญ้า','ป่าชายเลน','บึง',
-  ],
-  entertainment: [
-    'คอนเสิร์ต','ละคร','เกมโชว์','มายากล','ซีรีส์',
-    'การ์ตูน','หนังสือการ์ตูน','คอสเพลย์','เทศกาลดนตรี','ดนตรีสด',
-    'โรงละคร','ตู้คีบตุ๊กตา','ห้องหนีปริศนา','เกมกระดาน','ปาร์ตี้',
-  ],
-};
+if (fetchError) {
+  console.error('❌ ดึงข้อมูลไม่สำเร็จ:', fetchError.message);
+} else {
+  allWords = responseData || [];
+  console.log('✅ ข้อมูลที่ดึงได้จาก DB:', allWords); // ดูใน Console ว่ามีข้อมูลไหมเหมียว
+}
+} catch (e) {
+  console.error('❌ Connection Error:', e.message);
+}
 
-/**
- * ยาก: คำนามธรรม / คอนเซ็ปต์ / ต้องตีความ
- */
-const hardWords = {
-  concepts: [
-    'เสรีภาพ','ความยุติธรรม','ประชาธิปไตย','แรงโน้มถ่วง',
-    'อนาคต','ความฝัน','จิตวิญญาณ','มิตรภาพ','ความกลัว',
-    'เวลา','ความจริง','ศรัทธา','ดวงชะตา','สัญชาตญาณ','อิสรภาพ',
-    'จินตนาการ','ความทรงจำ','ความสุข','ความเศร้า','ความรัก',
-    'ความโกรธ','ความเหงา','ความหวัง','แรงบันดาลใจ','ความซื่อสัตย์',
-    'จริยธรรม','สำนึก','อัตตา','กรรม','นิพพาน',
-  ],
-  hardThings: [
-    'เดจาวู','ออโรร่า','หลุมดำ','ดีเอ็นเอ','บล็อกเชน',
-    'อัลกอริทึม','ปัญญาประดิษฐ์','เมตาเวิร์ส','ควอนตัม',
-    'พาราด็อกซ์','ยูโทเปีย','คริปโต','โฮโลแกรม','นาโนเทคโนโลยี','ไซเบอร์',
-    'จักรวาลคู่ขนาน','ไทม์แมชชีน','มิติที่สี่','สมการ','ทฤษฎีสัมพัทธภาพ',
-    'โคลนนิ่ง','จีโนม','สตาร์ทอัป','อินเทอร์เน็ต','ซอฟต์แวร์',
-    'ฮาร์ดแวร์','เซิร์ฟเวอร์','คลาวด์','บิ๊กดาต้า','ไมโครชิป',
-  ],
-  culture: [
-    'สงกรานต์','ลอยกระทง','ไหว้ครู','บวชนาค','ทอดกฐิน',
-    'รำไทย','มวยไทย','ตุ๊กตุ๊ก','ตักบาตร','กระทง',
-    'พิธีรดน้ำ','ขันโตก','ผ้าไหม','โขน','หนังตะลุง',
-    'ลิเก','หุ่นกระบอก','รำวง','ขบวนแห่','ฟ้อนเล็บ',
-    'หมอลำ','ผ้าขาวม้า','กลองยาว','ปี่พาทย์','ระนาด',
-    'เครื่องสาย','ตะกร้อ','ว่าวจุฬา','เรือยาว','พระพุทธรูป',
-  ],
-  obscure: [
-    'กาลอวกาศ','มิราจ','ไคเนซิส','ซินเนสทีเซีย','เอนโทรปี',
-    'โทโพโลยี','ฟิโบนัชชี','แฟร็กทัล','เนบิวลา','ซูเปอร์โนวา',
-    'ดิสโทเปีย','ไซเคเดลิก','เซอร์เรียล','อะมีบา','ฟอสซิล',
-    'ควาซาร์','พัลซาร์','แอนติแมตเตอร์','ไอโซโทป','โฟตอน',
-    'นิวตริโน','โปรตอน','อิเล็กตรอน','เซลล์ต้นกำเนิด','พลาสมา',
-    'ชีวสาร','โมเลกุล','โครโมโซม','ไวรัส','แบคทีเรีย',
-  ],
-  emotions: [
-    'ความอิจฉา','ความภาคภูมิใจ','ความละอาย','ความสงสาร','ความสับสน',
-    'ความตื่นเต้น','ความประหลาดใจ','ความเบื่อ','ความรังเกียจ','ความหลง',
-    'ความทะเยอทะยาน','ความโหยหา','ความอาย','ความขยะแขยง','ความมั่นใจ',
-  ],
-  abstract: [
-    'อุปมา','สัญลักษณ์','ปรัชญา','ตรรกะ','ทฤษฎี',
-    'สมมติฐาน','มายาคติ','อุดมการณ์','จิตใต้สำนึก','นิยาม',
-    'มโนทัศน์','สัจนิยม','อนาธิปไตย','ทุนนิยม','สังคมนิยม',
-  ],
-};
+// 2. เตรียมตัวแปรไว้ข้างนอกบล็อก
+let easyWords = {};
+let mediumWords = {};
+let hardWords = {};
 
-const DIFFICULTY_BANKS = {
+// 3. จัดกลุ่มข้อมูล (เช็คด้วยว่ามีข้อมูลไหมเหมียว)
+if (allWords.length > 0) {
+  const groupByCategory = (difficultyLevel) => {
+    return allWords
+      .filter(item => item.difficulty === difficultyLevel)
+      .reduce((acc, item) => {
+        if (!acc[item.category]) acc[item.category] = [];
+        acc[item.category].push(item.word);
+        return acc;
+      }, {});
+  };
+
+  easyWords = groupByCategory('easyWords');
+  mediumWords = groupByCategory('mediumWords');
+  hardWords = groupByCategory('hardWords');
+}
+
+// 4. DIFFICULTY_BANKS คงชื่อเดิมไว้เหมียว
+export const DIFFICULTY_BANKS = {
   easy: easyWords,
   medium: mediumWords,
   hard: hardWords,
 };
 
 const CATEGORY_LABELS = {
-  animals: 'สัตว์',
-  food: 'อาหาร',
-  places: 'สถานที่',
-  objects: 'สิ่งของ',
-  vehicles: 'ยานพาหนะ',
-  bodyParts: 'ร่างกาย',
-  activities: 'กิจกรรม',
-  occupations: 'อาชีพ',
-  nature: 'ธรรมชาติ',
-  entertainment: 'ความบันเทิง',
-  concepts: 'แนวคิด',
-  hardThings: 'เทคโนโลยี',
-  culture: 'วัฒนธรรม',
-  obscure: 'คำยาก',
-  emotions: 'อารมณ์',
-  abstract: 'นามธรรม',
+  animals: 'สัตว์', food: 'อาหาร', places: 'สถานที่', objects: 'สิ่งของ',
+  vehicles: 'ยานพาหนะ', bodyParts: 'ร่างกาย', activities: 'กิจกรรม',
+  occupations: 'อาชีพ', nature: 'ธรรมชาติ', entertainment: 'ความบันเทิง',
+  concepts: 'แนวคิด', hardThings: 'เทคโนโลยี', culture: 'วัฒนธรรม',
+  obscure: 'คำยาก', emotions: 'อารมณ์', abstract: 'นามธรรม',
 };
 
 // ══════════════════════════════════════════════
 //  Spyfall locations
 // ══════════════════════════════════════════════
 export const spyfallLocations = {
-  school:         'โรงเรียน',
-  hospital:       'โรงพยาบาล',
-  airport:        'สนามบิน',
-  beach:          'ชายหาด',
-  casino:         'คาสิโน',
-  supermarket:    'ซูเปอร์มาร์เก็ต',
-  restaurant:     'ร้านอาหาร',
-  spaceship:      'ยานอวกาศ',
-  submarine:      'เรือดำน้ำ',
-  zoo:            'สวนสัตว์',
-  temple:         'วัด',
-  bank:           'ธนาคาร',
-  circus:         'ละครสัตว์',
-  pirate_ship:    'เรือโจรสลัด',
-  police_station: 'สถานีตำรวจ',
-  movie_studio:   'สตูดิโอถ่ายหนัง',
-  train:          'รถไฟ',
-  amusement_park: 'สวนสนุก',
-  university:     'มหาวิทยาลัย',
-  hotel:          'โรงแรม',
+  school: 'โรงเรียน', hospital: 'โรงพยาบาล', airport: 'สนามบิน',
+  beach: 'ชายหาด', casino: 'คาสิโน', supermarket: 'ซูเปอร์มาร์เก็ต',
+  restaurant: 'ร้านอาหาร', spaceship: 'ยานอวกาศ', submarine: 'เรือดำน้ำ',
+  zoo: 'สวนสัตว์', temple: 'วัด', bank: 'ธนาคาร', circus: 'ละครสัตว์',
+  pirate_ship: 'เรือโจรสลัด', police_station: 'สถานีตำรวจ',
+  movie_studio: 'สตูดิโอถ่ายหนัง', train: 'รถไฟ', amusement_park: 'สวนสนุก',
+  university: 'มหาวิทยาลัย', hotel: 'โรงแรม',
 };
 
 export const ALL_SPYFALL_LOCATIONS = Object.entries(spyfallLocations).map(
@@ -216,37 +91,48 @@ export const ALL_SPYFALL_LOCATIONS = Object.entries(spyfallLocations).map(
 export function pickWord(difficulty = 'medium') {
   const bank = DIFFICULTY_BANKS[difficulty] || DIFFICULTY_BANKS.medium;
   const keys = Object.keys(bank);
+  
+  // ถ้ายังโหลดไม่เสร็จหรือไม่มีข้อมูล ให้บอกว่ากำลังโหลดเหมียว
+  if (keys.length === 0) {
+    return { word: 'กำลังรอข้อมูล...', category: 'รอนิดนึงเหมียว' };
+  }
+
   const key = keys[Math.floor(Math.random() * keys.length)];
   const list = bank[key];
+
+  if (!list || list.length === 0) {
+    return { word: 'กำลังดึงคำ...', category: CATEGORY_LABELS[key] || key };
+  }
+
   return {
     word: list[Math.floor(Math.random() * list.length)],
     category: CATEGORY_LABELS[key] || key,
   };
 }
 
-/**
- * Pick N unique random words from the given difficulty bank (for word-choice mode).
- * Guarantees no duplicate words.
- */
 export function pickWordChoices(difficulty = 'medium', count = 6) {
   const bank = DIFFICULTY_BANKS[difficulty] || DIFFICULTY_BANKS.medium;
-  // Pool all words across categories, dedup by word
   const seen = new Set();
-  const allWords = [];
+  const allWordsPool = [];
+  
   for (const key of Object.keys(bank)) {
-    for (const w of bank[key]) {
-      if (!seen.has(w)) {
-        seen.add(w);
-        allWords.push({ word: w, category: CATEGORY_LABELS[key] || key });
+    if (Array.isArray(bank[key])) {
+      for (const w of bank[key]) {
+        if (!seen.has(w)) {
+          seen.add(w);
+          allWordsPool.push({ word: w, category: CATEGORY_LABELS[key] || key });
+        }
       }
     }
   }
-  // Shuffle (Fisher–Yates) and pick
-  for (let i = allWords.length - 1; i > 0; i--) {
+
+  if (allWordsPool.length === 0) return [];
+
+  for (let i = allWordsPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [allWords[i], allWords[j]] = [allWords[j], allWords[i]];
+    [allWordsPool[i], allWordsPool[j]] = [allWordsPool[j], allWordsPool[i]];
   }
-  return allWords.slice(0, count);
+  return allWordsPool.slice(0, count);
 }
 
 export function pickSpyfallLocation() {
@@ -255,18 +141,14 @@ export function pickSpyfallLocation() {
   return { locationKey: key, locationLabel: spyfallLocations[key] };
 }
 
-/**
- * Generate a unique 4-character room code that doesn't already exist in the DB.
- */
 export async function generateRoomCode() {
-  const supabase = getSupabase();
+  const supabaseRoom = getSupabase(); // เปลี่ยนชื่อเพื่อไม่ให้ตีกับข้างบนเหมียว
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 4; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
-  // Verify uniqueness
-  const { data } = await supabase.from('rooms').select('code').eq('code', code).maybeSingle();
+  const { data } = await supabaseRoom.from('rooms').select('code').eq('code', code).maybeSingle();
   if (data) return generateRoomCode();
   return code;
 }

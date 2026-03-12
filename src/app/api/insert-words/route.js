@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_ANON_KEY;
-console.log("🔍 เชื่อมต่อไปที่ URL:", supabaseUrl);
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function POST(request) {
