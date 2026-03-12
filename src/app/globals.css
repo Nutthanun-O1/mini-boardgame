@@ -1,6 +1,14 @@
 /* =============================================
    DESIGN TOKENS
    ============================================= */
+@import "tailwindcss";
+@plugin "daisyui";
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --color-primary: blue;
+  --color-secondary: teal;
+}
 
 :root {
   --color-bg:              #0c0c12;
@@ -42,6 +50,7 @@
 
   --transition: 180ms ease;
 }
+
 
 
 
