@@ -63,6 +63,7 @@ export default function Page() {
   const channelRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const timeUpFiredRef = useRef(false);
+  const handlePlayAgainRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => { playersRef.current = players; }, [players]);
@@ -312,8 +313,8 @@ export default function Page() {
       if (remaining <= 0) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
-        // All players trigger — DB update is idempotent (phase guard)
-        handlePlayAgain();
+        // Use ref to avoid stale closure — always calls latest version
+        if (handlePlayAgainRef.current) handlePlayAgainRef.current();
       }
     }, 1000);
 
@@ -715,7 +716,7 @@ export default function Page() {
       word: w,
       category: cat,
       word_choices: null,
-    }).eq('code', code);
+    }).eq('code', code).eq('phase', 'word-pick');
   }
 
   async function handleGuessCorrect() {
@@ -915,6 +916,9 @@ export default function Page() {
       console.error('handlePlayAgain error:', err);
     }
   }
+
+  // Keep ref in sync so countdown effect always calls the latest version
+  handlePlayAgainRef.current = handlePlayAgain;
 
   async function handleLeaveRoom() {
     const pid = myId.current;

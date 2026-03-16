@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
@@ -17,12 +17,17 @@ export default function WordPick({ isDM, choices, onPickWord }) {
   const [timeLeft, setTimeLeft] = useState(PICK_TIME_LIMIT);
   const timerRef = useRef(null);
   const autoPickedRef = useRef(false);
+  // Use a ref for the callback to avoid resetting the timer on every render
+  const onPickWordRef = useRef(onPickWord);
+  onPickWordRef.current = onPickWord;
 
-  // Countdown timer for DM
+  // Countdown timer for DM — only depends on isDM and choices identity
   useEffect(() => {
     if (!isDM || !choices || choices.length === 0) return;
 
+    autoPickedRef.current = false;
     const startTime = Date.now();
+
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       const remaining = Math.max(0, PICK_TIME_LIMIT - elapsed);
@@ -36,7 +41,7 @@ export default function WordPick({ isDM, choices, onPickWord }) {
         if (!autoPickedRef.current) {
           autoPickedRef.current = true;
           const randomIdx = Math.floor(Math.random() * choices.length);
-          onPickWord(choices[randomIdx]);
+          onPickWordRef.current(choices[randomIdx]);
         }
       }
     }, 250);
@@ -47,7 +52,7 @@ export default function WordPick({ isDM, choices, onPickWord }) {
         timerRef.current = null;
       }
     };
-  }, [isDM, choices, onPickWord]);
+  }, [isDM, choices]);
 
   // Stop timer when DM confirms a word
   function handleConfirm() {
