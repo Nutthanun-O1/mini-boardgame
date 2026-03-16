@@ -145,11 +145,7 @@ export default function Page() {
 
       case 'word-pick':
         setPhase('word-pick');
-        // Only update choices from DB if they exist — otherwise keep local state
-        // (word_choices column may not exist in DB, DM stores them locally)
-        if (room.word_choices && room.word_choices.length > 0) {
-          setWordChoices(room.word_choices);
-        }
+        setWordChoices(room.word_choices || []);
         break;
 
       case 'playing':
@@ -605,8 +601,11 @@ export default function Page() {
   }
 
   async function handleSetWordPick(val) {
-    // word_pick column may not exist in DB — store locally only
+    const code = roomCodeRef.current;
     setWordPick(val);
+    await getSupabase().from('rooms')
+      .update({ word_pick: val })
+      .eq('code', code);
   }
 
   /**
@@ -688,9 +687,11 @@ export default function Page() {
         // Use local state 'wordPick' — NOT room.word_pick (may be stale)
         if (wordPick) {
           // Word-pick mode: go to word-pick phase first
-          const choices = pickWordChoices(diff, 5);
+          const choices = await pickWordChoices(diff, 5);
           const { error: err } = await getSupabase().from('rooms').update({
             phase: 'word-pick',
+            word_pick: true,
+            word_choices: choices,
             dm_id: dmPlayer.id,
             insider_id: insiderPlayer.id,
             insider_name: insiderPlayer.name,
@@ -700,13 +701,10 @@ export default function Page() {
           if (err) {
             console.error('startGame word-pick error:', err);
             setError('เกิดข้อผิดพลาดในการเริ่มเกม');
-          } else {
-            // Store choices locally — word_choices column may not exist in DB
-            setWordChoices(choices);
           }
         } else {
           // Normal mode: pick word automatically
-          const { word: w, category: cat } = pickWord(diff);
+          const { word: w, category: cat } = await pickWord(diff);
           const { error: err } = await getSupabase().from('rooms').update({
             phase: 'playing',
             timer_started_at: Date.now(),
@@ -737,6 +735,7 @@ export default function Page() {
       timer_started_at: Date.now(),
       word: w,
       category: cat,
+      word_choices: null,
     }).eq('code', code).eq('phase', 'word-pick');
   }
 
@@ -903,7 +902,6 @@ export default function Page() {
       // Idempotent: only update if room is still in a result phase.
       // Multiple players may call this simultaneously — first one wins,
       // the rest match 0 rows (harmless).
-      // NOTE: Do NOT include word_choices here — column may not exist in DB.
       const { error: updateErr } = await getSupabase().from('rooms').update({
         phase: 'lobby',
         word: null, category: null,
@@ -915,6 +913,7 @@ export default function Page() {
         spyfall_vote_active: false,
         spyfall_vote_caller: null, spyfall_vote_target: null,
         spyfall_votes: {},
+        word_choices: null,
         result: null,
       }).eq('code', code).in('phase', ['result', 'spyfall-result']);
 

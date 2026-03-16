@@ -268,14 +268,24 @@ export const ALL_SPYFALL_LOCATIONS = Object.entries(spyfallLocations).map(
 //  Helpers
 // ══════════════════════════════════════════════
 
-export function pickWord(difficulty = 'medium') {
-  const bank = DIFFICULTY_BANKS[difficulty] || DIFFICULTY_BANKS.medium;
-  const keys = Object.keys(bank);
-  const key = keys[Math.floor(Math.random() * keys.length)];
-  const list = bank[key];
+export async function pickWord(difficulty = 'medium') {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('words')
+    .select('word, category_label')
+    .eq('difficulty', difficulty);
+
+  if (error || !data || data.length === 0) {
+    console.error('Error fetching words:', error);
+    // Fallback if DB is empty
+    return { word: 'ทดสอบ', category: 'ทั่วไป' };
+  }
+
+  const randomIdx = Math.floor(Math.random() * data.length);
+  const picked = data[randomIdx];
   return {
-    word: list[Math.floor(Math.random() * list.length)],
-    category: CATEGORY_LABELS[key] || key,
+    word: picked.word,
+    category: picked.category_label
   };
 }
 
@@ -283,25 +293,29 @@ export function pickWord(difficulty = 'medium') {
  * Pick N unique random words from the given difficulty bank (for word-choice mode).
  * Guarantees no duplicate words.
  */
-export function pickWordChoices(difficulty = 'medium', count = 6) {
-  const bank = DIFFICULTY_BANKS[difficulty] || DIFFICULTY_BANKS.medium;
-  // Pool all words across categories, dedup by word
-  const seen = new Set();
-  const allWords = [];
-  for (const key of Object.keys(bank)) {
-    for (const w of bank[key]) {
-      if (!seen.has(w)) {
-        seen.add(w);
-        allWords.push({ word: w, category: CATEGORY_LABELS[key] || key });
-      }
-    }
+export async function pickWordChoices(difficulty = 'medium', count = 5) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('words')
+    .select('word, category_label')
+    .eq('difficulty', difficulty);
+
+  if (error || !data || data.length === 0) {
+    console.error('Error fetching word choices:', error);
+    // Fallback if DB is empty
+    return Array(count).fill({ word: 'ทดสอบ', category: 'ทั่วไป' });
   }
+
   // Shuffle (Fisher–Yates) and pick
-  for (let i = allWords.length - 1; i > 0; i--) {
+  for (let i = data.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [allWords[i], allWords[j]] = [allWords[j], allWords[i]];
+    [data[i], data[j]] = [data[j], data[i]];
   }
-  return allWords.slice(0, count);
+  
+  return data.slice(0, count).map(d => ({
+    word: d.word,
+    category: d.category_label
+  }));
 }
 
 export function pickSpyfallLocation() {
