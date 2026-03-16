@@ -1,16 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './AnimatedPage';
 
+const PICK_TIME_LIMIT = 10; // seconds
+
 /**
- * Word-pick phase: DM sees 6 random words and chooses one.
+ * Word-pick phase: DM sees 5 random words and has 10 seconds to choose one.
+ * If time runs out, a random word is auto-selected.
  * Other players wait.
  */
 export default function WordPick({ isDM, choices, onPickWord }) {
   const [selected, setSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(PICK_TIME_LIMIT);
+  const timerRef = useRef(null);
+  const autoPickedRef = useRef(false);
+
+  // Countdown timer for DM
+  useEffect(() => {
+    if (!isDM || !choices || choices.length === 0) return;
+
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = Math.max(0, PICK_TIME_LIMIT - elapsed);
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+
+        // Auto-pick a random word if DM hasn't confirmed yet
+        if (!autoPickedRef.current) {
+          autoPickedRef.current = true;
+          const randomIdx = Math.floor(Math.random() * choices.length);
+          onPickWord(choices[randomIdx]);
+        }
+      }
+    }, 250);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isDM, choices, onPickWord]);
+
+  // Stop timer when DM confirms a word
+  function handleConfirm() {
+    autoPickedRef.current = true;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    onPickWord(choices[selected]);
+  }
 
   if (!isDM) {
     return (
@@ -25,8 +72,39 @@ export default function WordPick({ isDM, choices, onPickWord }) {
     );
   }
 
+  const isUrgent = timeLeft <= 3;
+
   return (
     <AnimatedPage>
+      {/* ── Countdown Timer ── */}
+      <motion.div
+        className={`word-pick-timer ${isUrgent ? 'word-pick-timer--urgent' : ''}`}
+        variants={popIn}
+        initial="hidden"
+        animate="visible"
+      >
+        <span className="word-pick-timer__label">เวลาเลือกคำ</span>
+        <motion.span
+          className="word-pick-timer__value"
+          key={timeLeft}
+          initial={{ scale: 1.3, opacity: 0.5 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          {timeLeft}
+        </motion.span>
+        <span className="word-pick-timer__unit">วินาที</span>
+        {/* Progress bar */}
+        <div className="word-pick-timer__bar">
+          <motion.div
+            className="word-pick-timer__bar-fill"
+            initial={{ scaleX: 1 }}
+            animate={{ scaleX: timeLeft / PICK_TIME_LIMIT }}
+            transition={{ duration: 0.3, ease: 'linear' }}
+          />
+        </div>
+      </motion.div>
+
       <div className="page-header">
         <h1 className="page-title">เลือกคำลับ</h1>
         <p className="page-subtitle">เลือกคำ 1 คำที่จะใช้ในเกม</p>
@@ -79,7 +157,7 @@ export default function WordPick({ isDM, choices, onPickWord }) {
               <div className="confirm-buttons">
                 <motion.button
                   className="btn btn--success"
-                  onClick={() => onPickWord(choices[selected])}
+                  onClick={handleConfirm}
                   whileTap={tapScale}
                 >
                   ยืนยัน

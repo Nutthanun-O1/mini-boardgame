@@ -676,7 +676,7 @@ export default function Page() {
 
       if (room.word_pick) {
         // Word-pick mode: go to word-pick phase first
-        const choices = pickWordChoices(diff, 6);
+        const choices = pickWordChoices(diff, 5);
         await getSupabase().from('rooms').update({
           phase: 'word-pick',
           word_choices: choices,
@@ -950,7 +950,7 @@ export default function Page() {
           {phase !== 'gameSelect' && (
             <button className="header-back" onClick={handleLeaveRoom}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
           )}
@@ -961,126 +961,126 @@ export default function Page() {
 
       <main className="main">
         <AnimatePresence mode="wait">
-        {phase === 'gameSelect' && (
-          <GameSelect key="gameSelect" onSelect={handleSelectGame} />
-        )}
-        {phase === 'home' && (
-          <Home
-            key="home"
-            gameId={gameId}
-            onCreateRoom={handleCreateRoom}
-            onJoinRoom={handleJoinRoom}
-            onBack={() => setPhase('gameSelect')}
-            error={error}
-          />
-        )}
-        {phase === 'lobby' && (
-          <Lobby
-            key="lobby"
-            {...shared}
-            gameId={gameId}
-            timerSetting={timerSetting}
-            difficulty={difficulty}
-            dmMode={dmMode}
-            wordPick={wordPick}
-            onSetTimer={handleSetTimer}
-            onSetDifficulty={handleSetDifficulty}
-            onSetDmMode={handleSetDmMode}
-            onSetWordPick={handleSetWordPick}
-            onStartGame={handleStartGame}
-            onChangeName={handleChangeName}
-          />
-        )}
+          {phase === 'gameSelect' && (
+            <GameSelect key="gameSelect" onSelect={handleSelectGame} />
+          )}
+          {phase === 'home' && (
+            <Home
+              key="home"
+              gameId={gameId}
+              onCreateRoom={handleCreateRoom}
+              onJoinRoom={handleJoinRoom}
+              onBack={() => setPhase('gameSelect')}
+              error={error}
+            />
+          )}
+          {phase === 'lobby' && (
+            <Lobby
+              key="lobby"
+              {...shared}
+              gameId={gameId}
+              timerSetting={timerSetting}
+              difficulty={difficulty}
+              dmMode={dmMode}
+              wordPick={wordPick}
+              onSetTimer={handleSetTimer}
+              onSetDifficulty={handleSetDifficulty}
+              onSetDmMode={handleSetDmMode}
+              onSetWordPick={handleSetWordPick}
+              onStartGame={handleStartGame}
+              onChangeName={handleChangeName}
+            />
+          )}
 
-        {/* ── Word-pick phase (Insider only) ── */}
-        {phase === 'word-pick' && (
-          <WordPick
-            key="word-pick"
-            isDM={isDM}
-            choices={wordChoices}
-            onPickWord={handlePickWord}
-          />
-        )}
+          {/* ── Word-pick phase (Insider only) ── */}
+          {phase === 'word-pick' && (
+            <WordPick
+              key="word-pick"
+              isDM={isDM}
+              choices={wordChoices}
+              onPickWord={handlePickWord}
+            />
+          )}
 
-        {/* ── Insider phases ── */}
-        {phase === 'playing' && !isSpyfall && (
-          <Playing
-            key="playing"
-            {...shared}
-            role={myRole}
-            timerTotal={timerTotal}
-            timeRemaining={timeRemaining}
-            timerPaused={timerPaused}
-            onPauseTimer={handlePauseTimer}
-            onResumeTimer={handleResumeTimer}
-            onGuessCorrect={handleGuessCorrect}
-          />
-        )}
-        {phase === 'discussion' && (
-          <Discussion
-            key="discussion"
-            {...shared}
-            result={result}
-            onRevealInsider={handleRevealInsider}
-          />
-        )}
-        {phase === 'result' && !isSpyfall && (
-          <Result
-            key="result"
-            {...shared}
-            result={result}
-            myRole={myRole}
-            countdown={countdown}
-          />
-        )}
+          {/* ── Insider phases ── */}
+          {phase === 'playing' && !isSpyfall && (
+            <Playing
+              key="playing"
+              {...shared}
+              role={myRole}
+              timerTotal={timerTotal}
+              timeRemaining={timeRemaining}
+              timerPaused={timerPaused}
+              onPauseTimer={handlePauseTimer}
+              onResumeTimer={handleResumeTimer}
+              onGuessCorrect={handleGuessCorrect}
+            />
+          )}
+          {phase === 'discussion' && (
+            <Discussion
+              key="discussion"
+              {...shared}
+              result={result}
+              onRevealInsider={handleRevealInsider}
+            />
+          )}
+          {phase === 'result' && !isSpyfall && (
+            <Result
+              key="result"
+              {...shared}
+              result={result}
+              myRole={myRole}
+              countdown={countdown}
+            />
+          )}
 
-        {/* ── Spyfall phases ── */}
-        {phase === 'playing' && isSpyfall && (
-          <SpyfallPlaying
-            key="spyfall-playing"
-            role={myRole}
-            location={spyfallLocation}
-            locationKey={spyfallLocationKey}
-            locations={spyfallLocations}
-            timerTotal={timerTotal}
-            timeRemaining={timeRemaining}
-            timerPaused={timerPaused}
-            players={players}
-            myId={myId.current}
-            isDM={isDM}
-            onPauseTimer={handlePauseTimer}
-            onResumeTimer={handleResumeTimer}
-            onCallVote={handleCallVote}
-            onSpyGuess={handleSpyGuessLocation}
-          />
-        )}
-        {phase === 'spyfall-voting' && (
-          <SpyfallVoting
-            key="spyfall-voting"
-            voteInfo={computedVoteInfo}
-            players={players}
-            myId={myId.current}
-            onCastVote={handleCastVote}
-          />
-        )}
-        {phase === 'spyfall-last-chance' && (
-          <SpyfallLastChance
-            key="spyfall-last-chance"
-            spy={spyfallLastChance?.spy}
-            locations={spyfallLastChance?.locations || spyfallLocations}
-            isSpy={myRole === 'Spy'}
-            onLastGuess={handleSpyLastGuess}
-          />
-        )}
-        {phase === 'spyfall-result' && (
-          <SpyfallResult
-            key="spyfall-result"
-            result={result}
-            isDM={isDM}
-            myRole={myRole}
-            countdown={countdown}
-          />
-        )}
+          {/* ── Spyfall phases ── */}
+          {phase === 'playing' && isSpyfall && (
+            <SpyfallPlaying
+              key="spyfall-playing"
+              role={myRole}
+              location={spyfallLocation}
+              locationKey={spyfallLocationKey}
+              locations={spyfallLocations}
+              timerTotal={timerTotal}
+              timeRemaining={timeRemaining}
+              timerPaused={timerPaused}
+              players={players}
+              myId={myId.current}
+              isDM={isDM}
+              onPauseTimer={handlePauseTimer}
+              onResumeTimer={handleResumeTimer}
+              onCallVote={handleCallVote}
+              onSpyGuess={handleSpyGuessLocation}
+            />
+          )}
+          {phase === 'spyfall-voting' && (
+            <SpyfallVoting
+              key="spyfall-voting"
+              voteInfo={computedVoteInfo}
+              players={players}
+              myId={myId.current}
+              onCastVote={handleCastVote}
+            />
+          )}
+          {phase === 'spyfall-last-chance' && (
+            <SpyfallLastChance
+              key="spyfall-last-chance"
+              spy={spyfallLastChance?.spy}
+              locations={spyfallLastChance?.locations || spyfallLocations}
+              isSpy={myRole === 'Spy'}
+              onLastGuess={handleSpyLastGuess}
+            />
+          )}
+          {phase === 'spyfall-result' && (
+            <SpyfallResult
+              key="spyfall-result"
+              result={result}
+              isDM={isDM}
+              myRole={myRole}
+              countdown={countdown}
+            />
+          )}
         </AnimatePresence>
       </main>
     </div>
