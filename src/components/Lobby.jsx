@@ -105,6 +105,7 @@ export default function Lobby({
                     { value: 'easy', label: 'ง่าย' },
                     { value: 'medium', label: 'ปานกลาง' },
                     { value: 'hard', label: 'ยาก' },
+                    { value: 'nightmare', label: 'Nightmare' },
                   ].map(opt => (
                     <motion.button
                       key={opt.value}
