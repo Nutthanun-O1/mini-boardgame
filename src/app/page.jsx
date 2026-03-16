@@ -624,94 +624,104 @@ export default function Page() {
   }
 
   async function handleStartGame() {
-    const code = roomCodeRef.current;
-    const room = roomRef.current;
-    if (!room) return;
-    const pls = playersRef.current;
+    try {
+      const code = roomCodeRef.current;
+      const room = roomRef.current;
+      if (!room) return;
+      const pls = playersRef.current;
 
-    if (room.game_id === 'spyfall') {
-      // ─── Spyfall start ───
-      if (pls.length < 3) { setError('ต้องมีผู้เล่นอย่างน้อย 3 คน'); return; }
+      if (room.game_id === 'spyfall') {
+        // ─── Spyfall start ───
+        if (pls.length < 3) { setError('ต้องมีผู้เล่นอย่างน้อย 3 คน'); return; }
 
-      const { locationKey, locationLabel } = pickSpyfallLocation();
-      const spyIdx = Math.floor(Math.random() * pls.length);
-      const spyPlayer = pls[spyIdx];
-      const roles = {};
-      pls.forEach(p => { roles[p.id] = p.id === spyPlayer.id ? 'Spy' : 'Agent'; });
+        const { locationKey, locationLabel } = pickSpyfallLocation();
+        const spyIdx = Math.floor(Math.random() * pls.length);
+        const spyPlayer = pls[spyIdx];
+        const roles = {};
+        pls.forEach(p => { roles[p.id] = p.id === spyPlayer.id ? 'Spy' : 'Agent'; });
 
-      await getSupabase().from('rooms').update({
-        phase: 'playing',
-        timer_started_at: Date.now(),
-        spy_id: spyPlayer.id,
-        spy_name: spyPlayer.name,
-        spyfall_location: locationKey,
-        spyfall_location_label: locationLabel,
-        spyfall_vote_active: false,
-        spyfall_vote_caller: null,
-        spyfall_vote_target: null,
-        spyfall_votes: {},
-        roles,
-        result: null,
-      }).eq('code', code);
-
-    } else {
-      // ─── Insider start ───
-      if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
-
-      // Use local state for lobby settings (roomRef may be stale)
-      const diff = difficulty || 'medium';
-      const dmPlayer = resolveDM(pls);
-      const nonDM = pls.filter(p => p.id !== dmPlayer.id);
-      const insiderIdx = Math.floor(Math.random() * nonDM.length);
-      const insiderPlayer = nonDM[insiderIdx];
-
-      const roles = {};
-      pls.forEach(p => {
-        if (p.id === dmPlayer.id) roles[p.id] = 'Master';
-        else if (p.id === insiderPlayer.id) roles[p.id] = 'Insider';
-        else roles[p.id] = 'Common';
-      });
-
-      // Update DM flag in players table if DM changed
-      if (!dmPlayer.isDM) {
-        // Remove old DM flag
-        await getSupabase().from('players')
-          .update({ is_dm: false })
-          .eq('room_code', code).eq('is_dm', true);
-        // Set new DM
-        await getSupabase().from('players')
-          .update({ is_dm: true })
-          .eq('room_code', code).eq('id', dmPlayer.id);
-      }
-
-      // Use local state 'wordPick' — NOT room.word_pick (may be stale)
-      if (wordPick) {
-        // Word-pick mode: go to word-pick phase first
-        const choices = pickWordChoices(diff, 5);
-        await getSupabase().from('rooms').update({
-          phase: 'word-pick',
-          word_choices: choices,
-          dm_id: dmPlayer.id,
-          insider_id: insiderPlayer.id,
-          insider_name: insiderPlayer.name,
-          roles,
-          result: null,
-        }).eq('code', code);
-      } else {
-        // Normal mode: pick word automatically
-        const { word: w, category: cat } = pickWord(diff);
-        await getSupabase().from('rooms').update({
+        const { error: err } = await getSupabase().from('rooms').update({
           phase: 'playing',
           timer_started_at: Date.now(),
-          word: w,
-          category: cat,
-          dm_id: dmPlayer.id,
-          insider_id: insiderPlayer.id,
-          insider_name: insiderPlayer.name,
+          spy_id: spyPlayer.id,
+          spy_name: spyPlayer.name,
+          spyfall_location: locationKey,
+          spyfall_location_label: locationLabel,
+          spyfall_vote_active: false,
+          spyfall_vote_caller: null,
+          spyfall_vote_target: null,
+          spyfall_votes: {},
           roles,
           result: null,
         }).eq('code', code);
+        if (err) console.error('startGame spyfall error:', err);
+
+      } else {
+        // ─── Insider start ───
+        if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
+
+        // Use local state for lobby settings (roomRef may be stale)
+        const diff = difficulty || 'medium';
+        const dmPlayer = resolveDM(pls);
+        const nonDM = pls.filter(p => p.id !== dmPlayer.id);
+        const insiderIdx = Math.floor(Math.random() * nonDM.length);
+        const insiderPlayer = nonDM[insiderIdx];
+
+        const roles = {};
+        pls.forEach(p => {
+          if (p.id === dmPlayer.id) roles[p.id] = 'Master';
+          else if (p.id === insiderPlayer.id) roles[p.id] = 'Insider';
+          else roles[p.id] = 'Common';
+        });
+
+        // Update DM flag in players table if DM changed
+        if (!dmPlayer.isDM) {
+          await getSupabase().from('players')
+            .update({ is_dm: false })
+            .eq('room_code', code).eq('is_dm', true);
+          await getSupabase().from('players')
+            .update({ is_dm: true })
+            .eq('room_code', code).eq('id', dmPlayer.id);
+        }
+
+        // Use local state 'wordPick' — NOT room.word_pick (may be stale)
+        if (wordPick) {
+          // Word-pick mode: go to word-pick phase first
+          const choices = pickWordChoices(diff, 5);
+          const { error: err } = await getSupabase().from('rooms').update({
+            phase: 'word-pick',
+            word_pick: true,
+            word_choices: choices,
+            dm_id: dmPlayer.id,
+            insider_id: insiderPlayer.id,
+            insider_name: insiderPlayer.name,
+            roles,
+            result: null,
+          }).eq('code', code);
+          if (err) {
+            console.error('startGame word-pick error:', err);
+            setError('เกิดข้อผิดพลาดในการเริ่มเกม');
+          }
+        } else {
+          // Normal mode: pick word automatically
+          const { word: w, category: cat } = pickWord(diff);
+          const { error: err } = await getSupabase().from('rooms').update({
+            phase: 'playing',
+            timer_started_at: Date.now(),
+            word: w,
+            category: cat,
+            dm_id: dmPlayer.id,
+            insider_id: insiderPlayer.id,
+            insider_name: insiderPlayer.name,
+            roles,
+            result: null,
+          }).eq('code', code);
+          if (err) console.error('startGame playing error:', err);
+        }
       }
+    } catch (err) {
+      console.error('handleStartGame error:', err);
+      setError('เกิดข้อผิดพลาดในการเริ่มเกม');
     }
   }
 
@@ -927,8 +937,8 @@ export default function Page() {
       setWordChoices(null);
       timeUpFiredRef.current = false;
 
-      // Do NOT call fetchRoom here — it can bring back stale 'result' phase
-      // and cause an infinite loop. Rely on Realtime to sync the DB state.
+      // Re-fetch from DB — safe now because playAgainFiredRef prevents loop
+      await fetchRoom(code);
       await fetchPlayers(code);
 
       // Keep room session valid for auto-rejoin on page refresh
