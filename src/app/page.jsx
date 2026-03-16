@@ -64,6 +64,7 @@ export default function Page() {
   const timerIntervalRef = useRef(null);
   const timeUpFiredRef = useRef(false);
   const handlePlayAgainRef = useRef(null);
+  const playAgainFiredRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => { playersRef.current = players; }, [players]);
@@ -302,7 +303,14 @@ export default function Page() {
     }
 
     const isResultPhase = phase === 'result' || phase === 'spyfall-result';
-    if (!isResultPhase) { setCountdown(null); return; }
+    if (!isResultPhase) {
+      setCountdown(null);
+      playAgainFiredRef.current = false; // Reset guard when leaving result
+      return;
+    }
+
+    // Prevent re-triggering if already fired for this result phase
+    if (playAgainFiredRef.current) return;
 
     let remaining = 3;
     setCountdown(remaining);
@@ -313,7 +321,7 @@ export default function Page() {
       if (remaining <= 0) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
-        // Use ref to avoid stale closure — always calls latest version
+        playAgainFiredRef.current = true;
         if (handlePlayAgainRef.current) handlePlayAgainRef.current();
       }
     }, 1000);
@@ -650,7 +658,8 @@ export default function Page() {
       // ─── Insider start ───
       if (pls.length < 4) { setError('ต้องมีผู้เล่นอย่างน้อย 4 คน'); return; }
 
-      const diff = room.difficulty || 'medium';
+      // Use local state for lobby settings (roomRef may be stale)
+      const diff = difficulty || 'medium';
       const dmPlayer = resolveDM(pls);
       const nonDM = pls.filter(p => p.id !== dmPlayer.id);
       const insiderIdx = Math.floor(Math.random() * nonDM.length);
@@ -675,7 +684,8 @@ export default function Page() {
           .eq('room_code', code).eq('id', dmPlayer.id);
       }
 
-      if (room.word_pick) {
+      // Use local state 'wordPick' — NOT room.word_pick (may be stale)
+      if (wordPick) {
         // Word-pick mode: go to word-pick phase first
         const choices = pickWordChoices(diff, 5);
         await getSupabase().from('rooms').update({
@@ -882,7 +892,7 @@ export default function Page() {
       // Idempotent: only update if room is still in a result phase.
       // Multiple players may call this simultaneously — first one wins,
       // the rest match 0 rows (harmless).
-      await getSupabase().from('rooms').update({
+      const { error: updateErr } = await getSupabase().from('rooms').update({
         phase: 'lobby',
         word: null, category: null,
         roles: {},
@@ -897,6 +907,10 @@ export default function Page() {
         result: null,
       }).eq('code', code).in('phase', ['result', 'spyfall-result']);
 
+      if (updateErr) {
+        console.error('handlePlayAgain update error:', updateErr);
+      }
+
       // Force local state transition immediately (don't rely solely on Realtime)
       setPhase('lobby');
       setMyRole(null);
@@ -905,9 +919,16 @@ export default function Page() {
       setResult(null);
       setTimerStartedAt(null);
       setError('');
+      setSpyfallLocation(null);
+      setSpyfallLocationKey(null);
+      setSpyfallLocations([]);
+      setSpyfallVoteInfo(null);
+      setSpyfallLastChance(null);
+      setWordChoices(null);
+      timeUpFiredRef.current = false;
 
-      // Re-fetch from DB — sets correct isDM, phase, players, etc.
-      await fetchRoom(code);
+      // Do NOT call fetchRoom here — it can bring back stale 'result' phase
+      // and cause an infinite loop. Rely on Realtime to sync the DB state.
       await fetchPlayers(code);
 
       // Keep room session valid for auto-rejoin on page refresh
