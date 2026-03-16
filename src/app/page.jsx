@@ -944,12 +944,48 @@ export default function Page() {
   async function handleLeaveRoom() {
     const pid = myId.current;
     const code = roomCodeRef.current;
-    if (isDM) {
-      await getSupabase().from('rooms').delete().eq('code', code);
-    } else {
+    if (!code) return;
+
+    try {
+      // Remove this player from the room
       await getSupabase().from('players').delete()
         .eq('id', pid).eq('room_code', code);
+
+      // Check how many players remain
+      const { data: remaining } = await getSupabase()
+        .from('players').select('id, name, is_dm')
+        .eq('room_code', code)
+        .order('created_at', { ascending: true });
+
+      if (!remaining || remaining.length === 0) {
+        // Last player left → delete the room entirely
+        await getSupabase().from('rooms').delete().eq('code', code);
+      } else if (isDM) {
+        // DM left but others remain → transfer DM to the first remaining player
+        const newDM = remaining[0];
+        await getSupabase().from('players')
+          .update({ is_dm: true })
+          .eq('room_code', code).eq('id', newDM.id);
+        // Update room's dm_id and reset to lobby so others can continue
+        await getSupabase().from('rooms').update({
+          dm_id: newDM.id,
+          phase: 'lobby',
+          word: null, category: null,
+          roles: {},
+          insider_id: null, insider_name: null,
+          timer_started_at: null,
+          spy_id: null, spy_name: null,
+          spyfall_location: null, spyfall_location_label: null,
+          spyfall_vote_active: false,
+          spyfall_votes: {},
+          word_choices: null,
+          result: null,
+        }).eq('code', code);
+      }
+    } catch (err) {
+      console.error('handleLeaveRoom error:', err);
     }
+
     doResetAll();
   }
 
