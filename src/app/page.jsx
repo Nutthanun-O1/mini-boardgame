@@ -145,7 +145,11 @@ export default function Page() {
 
       case 'word-pick':
         setPhase('word-pick');
-        setWordChoices(room.word_choices || []);
+        // Only update choices from DB if they exist — otherwise keep local state
+        // (word_choices column may not exist in DB, DM stores them locally)
+        if (room.word_choices && room.word_choices.length > 0) {
+          setWordChoices(room.word_choices);
+        }
         break;
 
       case 'playing':
