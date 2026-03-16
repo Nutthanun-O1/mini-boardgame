@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSession, saveSessionName } from '@/lib/supabase';
+import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSession, saveSessionName, getSessionName } from '@/lib/supabase';
 import {
   generateRoomCode, pickWord, pickWordChoices, pickSpyfallLocation,
   ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
@@ -312,10 +312,8 @@ export default function Page() {
       if (remaining <= 0) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
-        // Only DM pushes the lobby reset to DB
-        if (isDMRef.current) {
-          handlePlayAgain();
-        }
+        // All players trigger — DB update is idempotent (phase guard)
+        handlePlayAgain();
       }
     }, 1000);
 
@@ -876,22 +874,15 @@ export default function Page() {
   }
 
   async function handlePlayAgain() {
-    const pid = myId.current;
     const code = roomCodeRef.current;
-    if (!code) { setError('ไม่พบรหัสห้อง'); return; }
+    if (!code) return;
 
     try {
-      // Reset DM flags in players table — whoever presses becomes DM
-      await getSupabase().from('players')
-        .update({ is_dm: false })
-        .eq('room_code', code);
-      await getSupabase().from('players')
-        .update({ is_dm: true })
-        .eq('room_code', code).eq('id', pid);
-
-      const { error: updateErr } = await getSupabase().from('rooms').update({
+      // Idempotent: only update if room is still in a result phase.
+      // Multiple players may call this simultaneously — first one wins,
+      // the rest match 0 rows (harmless).
+      await getSupabase().from('rooms').update({
         phase: 'lobby',
-        dm_id: pid,
         word: null, category: null,
         roles: {},
         insider_id: null, insider_name: null,
@@ -903,17 +894,9 @@ export default function Page() {
         spyfall_votes: {},
         word_choices: null,
         result: null,
-      }).eq('code', code);
-
-      if (updateErr) {
-        console.error('handlePlayAgain room update error:', updateErr);
-        setError('ไม่สามารถเริ่มเกมใหม่ได้: ' + updateErr.message);
-        return;
-      }
+      }).eq('code', code).in('phase', ['result', 'spyfall-result']);
 
       // Force local state transition immediately (don't rely solely on Realtime)
-      setIsDM(true);
-      isDMRef.current = true;
       setPhase('lobby');
       setMyRole(null);
       setWord(null);
@@ -922,12 +905,14 @@ export default function Page() {
       setTimerStartedAt(null);
       setError('');
 
-      // Also re-fetch to ensure full sync
+      // Re-fetch from DB — sets correct isDM, phase, players, etc.
       await fetchRoom(code);
       await fetchPlayers(code);
+
+      // Keep room session valid for auto-rejoin on page refresh
+      saveRoomSession({ roomCode: code, playerName: getSessionName() });
     } catch (err) {
       console.error('handlePlayAgain error:', err);
-      setError('เกิดข้อผิดพลาด: ' + (err.message || 'ลองอีกครั้ง'));
     }
   }
 
