@@ -946,6 +946,8 @@ export default function Page() {
     const code = roomCodeRef.current;
     if (!code) return;
 
+    const currentGameId = gameId; // preserve game type for room browser
+
     try {
       // Remove this player from the room
       await getSupabase().from('players').delete()
@@ -986,7 +988,39 @@ export default function Page() {
       console.error('handleLeaveRoom error:', err);
     }
 
-    doResetAll();
+    // Reset room state but go to Home (room browser), NOT gameSelect
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    setCountdown(null);
+    setRoomCode('');
+    setIsDM(false);
+    setPlayers([]);
+    setMyRole(null);
+    setWord(null);
+    setCategory(null);
+    setTimerTotal(300);
+    setTimerStartedAt(null);
+    setTimeRemaining(300);
+    setTimerSetting(300);
+    setResult(null);
+    setError('');
+    setSpyfallLocation(null);
+    setSpyfallLocationKey(null);
+    setSpyfallLocations([]);
+    setSpyfallVoteInfo(null);
+    setSpyfallLastChance(null);
+    setWordChoices(null);
+    roomRef.current = null;
+    roomCodeRef.current = '';
+    timeUpFiredRef.current = false;
+    playAgainFiredRef.current = false;
+    clearRoomSession();
+
+    // Stay on the Home screen so the room browser is visible
+    setGameId(currentGameId);
+    setPhase('home');
   }
 
   // ══════════════════════════════════════════════
