@@ -222,7 +222,7 @@ export default function Page() {
         filter: `code=eq.${roomCode}`,
       }, (payload) => {
         if (payload.eventType === 'DELETE') {
-          alert('DM ออกจากห้องแล้ว');
+          alert('ห้องนี้ถูกปิดแล้ว');
           doResetAll();
           return;
         }
