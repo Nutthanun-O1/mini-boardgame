@@ -7,6 +7,7 @@ import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './A
 export default function Lobby({
   roomCode, players, isDM, timerSetting, gameId,
   difficulty, dmMode, wordPick, playerName,
+  bannedDMs = [], onToggleBanDM,
   onSetTimer, onSetDifficulty, onSetDmMode, onSetWordPick,
   onStartGame, onChangeName, error
 }) {
@@ -146,6 +147,38 @@ export default function Lobby({
                   {wordPick ? 'เปิด' : 'ปิด'}
                 </motion.button>
               </div>
+
+              <AnimatePresence>
+                {dmMode === 'random' && players.length > 0 && (
+                  <motion.div
+                    className="field"
+                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  >
+                    <label className="field__label" style={{ fontSize: '0.9rem' }}>
+                      แบนไม่ให้สุ่มเป็น DM <span style={{ color: 'var(--color-primary)', fontWeight: 'normal', fontSize: '0.8rem' }}>(เลือกคนที่ไม่ต้องการให้เป็น)</span>
+                    </label>
+                    <div className="ban-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+                      {players.map(p => {
+                        const isBanned = bannedDMs.includes(p.id);
+                        return (
+                          <motion.button
+                            key={p.id}
+                            className={`btn--sm ${isBanned ? 'btn--destructive' : 'btn--secondary'}`}
+                            onClick={() => onToggleBanDM(p.id)}
+                            whileTap={tapScale}
+                            style={{ padding: '6px 12px', fontSize: '0.9rem', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            layout
+                          >
+                            <span>{isBanned ? '🚫' : '✓'}</span> {p.name}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           )}
 

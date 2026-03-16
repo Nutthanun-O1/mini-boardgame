@@ -42,6 +42,7 @@ export default function Page() {
   const [dmMode, setDmMode] = useState('creator');
   const [wordPick, setWordPick] = useState(false);
   const [wordChoices, setWordChoices] = useState(null);
+  const [bannedDMs, setBannedDMs] = useState([]);
 
   // ── Spyfall-specific state ──
   const [spyfallLocation, setSpyfallLocation] = useState(null);
@@ -608,6 +609,12 @@ export default function Page() {
       .eq('code', code);
   }
 
+  function handleToggleBanDM(playerId) {
+    setBannedDMs(prev => 
+      prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+    );
+  }
+
   /**
    * Determine who the DM should be based on dm_mode setting.
    */
@@ -617,6 +624,10 @@ export default function Page() {
       return pls.find(p => p.isDM) || pls[0];
     }
     if (mode === 'random') {
+      const eligible = pls.filter(p => !bannedDMs.includes(p.id));
+      if (eligible.length > 0) {
+        return eligible[Math.floor(Math.random() * eligible.length)];
+      }
       return pls[Math.floor(Math.random() * pls.length)];
     }
     // mode is a specific player ID
@@ -1089,6 +1100,8 @@ export default function Page() {
               onSetDifficulty={handleSetDifficulty}
               onSetDmMode={handleSetDmMode}
               onSetWordPick={handleSetWordPick}
+              bannedDMs={bannedDMs}
+              onToggleBanDM={handleToggleBanDM}
               onStartGame={handleStartGame}
               onChangeName={handleChangeName}
             />
