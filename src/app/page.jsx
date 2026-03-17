@@ -122,9 +122,10 @@ export default function Page() {
 
     setGameId(room.game_id);
     setTimerSetting(room.timer_duration);
-    setDifficulty(room.difficulty || 'medium');
-    setDmMode(room.dm_mode || 'creator');
-    setWordPick(room.word_pick || false);
+    if (room.difficulty !== undefined && room.difficulty !== null) setDifficulty(room.difficulty);
+    if (room.dm_mode !== undefined && room.dm_mode !== null) setDmMode(room.dm_mode);
+    if (room.word_pick !== undefined && room.word_pick !== null) setWordPick(room.word_pick);
+    if (room.banned_dms !== undefined && room.banned_dms !== null) setBannedDMs(room.banned_dms);
     if (role) setMyRole(role);
 
     switch (room.phase) {
@@ -610,9 +611,12 @@ export default function Page() {
   }
 
   function handleToggleBanDM(playerId) {
-    setBannedDMs(prev => 
-      prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
-    );
+    const code = roomCodeRef.current;
+    setBannedDMs(prev => {
+      const next = prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId];
+      getSupabase().from('rooms').update({ banned_dms: next }).eq('code', code).then();
+      return next;
+    });
   }
 
   /**
