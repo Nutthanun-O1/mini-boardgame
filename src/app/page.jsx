@@ -914,10 +914,16 @@ export default function Page() {
     if (!code) return;
 
     try {
-      // Idempotent: only update if room is still in a result phase.
-      // Multiple players may call this simultaneously — first one wins,
-      // the rest match 0 rows (harmless).
-      const { error: updateErr } = await getSupabase().from('rooms').update({
+      // Find the original room creator (the one who joined first)
+      const { data: remaining } = await getSupabase()
+        .from('players').select('id')
+        .eq('room_code', code)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      const creatorId = remaining?.[0]?.id;
+
+      const roomUpdatePayload = {
         phase: 'lobby',
         word: null, category: null,
         roles: {},
@@ -930,10 +936,34 @@ export default function Page() {
         spyfall_votes: {},
         word_choices: null,
         result: null,
-      }).eq('code', code).in('phase', ['result', 'spyfall-result']);
+      };
+
+      if (creatorId) {
+        roomUpdatePayload.dm_id = creatorId;
+      }
+
+      // Idempotent: only update if room is still in a result phase.
+      // Multiple players may call this simultaneously — first one wins,
+      // the rest match 0 rows (harmless).
+      const { data: updatedRoom, error: updateErr } = await getSupabase().from('rooms')
+        .update(roomUpdatePayload)
+        .eq('code', code)
+        .in('phase', ['result', 'spyfall-result'])
+        .select();
 
       if (updateErr) {
         console.error('handlePlayAgain update error:', updateErr);
+      }
+
+      // Only the caller who successfully transitions the phase updates players config
+      if (updatedRoom && updatedRoom.length > 0 && creatorId) {
+        await getSupabase().from('players')
+          .update({ is_dm: false })
+          .eq('room_code', code).eq('is_dm', true);
+
+        await getSupabase().from('players')
+          .update({ is_dm: true })
+          .eq('room_code', code).eq('id', creatorId);
       }
 
       // Force local state transition immediately (don't rely solely on Realtime)
