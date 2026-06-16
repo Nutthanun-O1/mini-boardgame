@@ -339,3 +339,143 @@ export async function generateRoomCode() {
   if (data) return generateRoomCode();
   return code;
 }
+
+// ══════════════════════════════════════════════
+//  Exploding Kittens helpers
+// ══════════════════════════════════════════════
+
+export const KITTENS_CARDS = {
+  defuse: { label: 'กู้ระเบิด', desc: 'ใช้เมื่อจั่วได้แมวระเบิด เพื่อเอาตัวรอด', color: '#10b981', action: false, img: '/images/explode-cat/Defuse-Via-3AM-Flatulence.jpg' },
+  kitten: { label: 'แมวระเบิด', desc: 'หากจั่วได้การ์ดนี้และไม่มีการ์ดกู้ระเบิด คุณจะแพ้ทันที', color: '#ef4444', action: false, img: '/images/explode-cat/Exploding-Kitten-Alien.jpg' },
+  attack: { label: 'โจมตี', desc: 'จบเทิร์นโดยไม่ต้องจั่วไพ่ และบังคับให้ผู้เล่นคนถัดไปเล่น 2 เทิร์น', color: '#f59e0b', action: true, img: '/images/explode-cat/Attack-Bear-o-Dactyl.jpg' },
+  skip: { label: 'ข้าม', desc: 'จบเทิร์นโดยไม่ต้องจั่วไพ่ 1 ใบ', color: '#3b82f6', action: true, img: '/images/explode-cat/Skip-Commandeer-a-Bunnyraptor.jpg' },
+  'see-future': { label: 'มองเห็นอนาคต', desc: 'แอบดูไพ่ 3 ใบแรกจากกองจั่ว', color: '#8b5cf6', action: true, img: '/images/explode-cat/See-the-Future-Ask-the-All-Seeing-Goat-Wizard.jpg' },
+  shuffle: { label: 'สับไพ่', desc: 'สับกองการ์ดจั่วทั้งหมดเพื่อเปลี่ยนลำดับไพ่', color: '#ec4899', action: true, img: '/images/explode-cat/Shuffle-A-Kraken-Emerges-and-Hes-Super-Upset.jpg' },
+  favor: { label: 'ขอความช่วยเหลือ', desc: 'บังคับให้ผู้เล่น 1 คน มอบการ์ดในมือให้คุณ 1 ใบ (ผู้เล่นคนนั้นเลือกเอง)', color: '#06b6d4', action: true, img: '/images/explode-cat/Favor-Fall-So-Deeply-in-Love.jpg' },
+  
+  // Phase 1 Additions
+  reverse: { label: 'ย้อนกลับ', desc: 'จบเทิร์นโดยไม่ต้องจั่วไพ่ และสลับทิศทางการเล่น', color: '#facc15', action: true, img: '/images/explode-cat/Reverse-Go-Back-In-Time-And-Steal-A-Pregnant-Dinosaur.jpg' },
+  'draw-from-bottom': { label: 'จั่วจากล่างสุด', desc: 'จบเทิร์นของคุณโดยการจั่วไพ่จากใบล่างสุดของกอง', color: '#64748b', action: true, img: '/images/explode-cat/Draw-from-the-Bottom-Take-a-Big-Bite-of-Your-Coward-Sandwich.jpg' },
+  'targeted-attack': { label: 'โจมตีระบุเป้าหมาย', desc: 'จบเทิร์นโดยไม่ต้องจั่วไพ่ และบังคับให้ผู้เล่นที่คุณเลือกเล่น 2 เทิร์น', color: '#ea580c', action: true, img: '/images/explode-cat/Targeted-Attack-2x-Deploy-The-Groin-Kicking-Panda-Bear.jpg' },
+  'super-skip': { label: 'ซูเปอร์ข้าม', desc: 'จบเทิร์นของคุณทั้งหมด (ข้ามเทิร์นที่สะสมไว้ทั้งหมด) โดยไม่ต้องจั่วไพ่', color: '#2563eb', action: true, img: '/images/explode-cat/Super-Skip-Hitch-A-Ride-on-a-Corgihorse.jpg' },
+  'swap-top-bottom': { label: 'สลับบนล่าง', desc: 'สลับไพ่ใบบนสุดกับใบล่างสุดของกองจั่ว โดยไม่ต้องดูหน้าไพ่', color: '#d946ef', action: true, img: '/images/explode-cat/Swap-Top-and-Bottom.jpg' },
+  'personal-attack': { label: 'โจมตีตัวเอง', desc: 'เพิ่ม 3 เทิร์นให้กับตัวคุณเอง (ปกติจะใช้คู่กับการ์ดอื่นๆ เพื่อสะสมแอคชั่น)', color: '#be123c', action: true, img: '/images/explode-cat/Personal-Attack-Finally-Throw-Up-All-the-Crayons-You-Ate-When-You-Were-A-Kid.jpg' },
+  
+  // Phase 2 Additions
+  'alter-future': { label: 'แก้ไขอนาคต', desc: 'แอบดูไพ่ 3 ใบบนสุด และจัดเรียงลำดับใหม่ได้', color: '#8b5cf6', action: true, img: '/images/explode-cat/Alter-the-Future-Cat-Wizard.jpg' },
+  'share-future': { label: 'แชร์อนาคต', desc: 'เปิดไพ่ 3 ใบบนสุดให้ทุกคนเห็นพร้อมกัน', color: '#8b5cf6', action: true, img: '/images/explode-cat/Share-the-Future-Listen-to-the-Words-of-an-Emo-Emu.jpg' },
+  'beard-cat': { label: 'Beard Cat', desc: 'สะสมครบ 2 ใบใช้สุ่มขโมยการ์ด', color: '#6b7280', action: false, img: '/images/explode-cat/Beard-Cat.jpg' },
+  'feral-cat': { label: 'Feral Cat', desc: 'ใช้แทนไพ่แมวปกติใบไหนก็ได้ 1 ใบ', color: '#6b7280', action: false, img: '/images/explode-cat/Feral-Cat.jpg' },
+  
+  // Phase 3 & 4 Additions
+  'nope': { label: 'ไม่!', desc: 'หยุดการทำงานของการ์ดแอคชั่นใดๆ ยกเว้นแมวระเบิดและกู้ระเบิด เล่นตอนไหนก็ได้', color: '#ef4444', action: false, isNope: true, img: '/images/explode-cat/Nope-A-Jackanope-Bounds-into-the-Room.jpg' },
+  'imploding-kitten': { label: 'แมวระเบิดหงายหน้า', desc: 'ไม่สามารถกู้ได้! ถ้าจั่วเจอคือตายทันที (ภาคเสริม)', color: '#000000', action: false, img: '/images/explode-cat/Imploding-Kitten.jpg' },
+  'streaking-kitten': { label: 'Streaking Kitten', desc: 'คุณสามารถถือแมวระเบิดไว้ในมือได้โดยไม่ตาย (ภาคเสริม)', color: '#f59e0b', action: false, img: '/images/explode-cat/Streaking-Kitten.jpg' },
+  'zombie-kitten': { label: 'Zombie Kitten', desc: 'กู้ระเบิดได้และชุบชีวิตผู้เล่นที่ตายไปแล้ว 1 คน (ภาคเสริม)', color: '#10b981', action: false, img: '/images/explode-cat/Zombie-Kitten-Always-Land-On-Your-Feet.jpg' }
+};
+
+export function initKittensGame(players, targetDeckSize = 50, customKittensCount = null) {
+  const pCount = players.length;
+  
+  // 1. Create a pool of action cards
+  let actionPool = [];
+  const baseCardCounts = {
+    attack: 4, skip: 4, 'see-future': 5, shuffle: 4, favor: 4,
+    reverse: 4, 'draw-from-bottom': 4, 'targeted-attack': 3, 
+    'super-skip': 2, 'swap-top-bottom': 3, 'personal-attack': 3,
+    'alter-future': 4, 'share-future': 2,
+    'beard-cat': 4, 'feral-cat': 4,
+    'nope': 5,
+    'streaking-kitten': 1,
+    'zombie-kitten': 2
+  };
+  
+  Object.entries(baseCardCounts).forEach(([type, count]) => {
+    for (let i = 0; i < count; i++) actionPool.push(type);
+  });
+  
+  const neededActionsForHands = pCount * 4;
+  const defusesInDeck = Math.max(0, 6 - pCount);
+  const kittensCount = customKittensCount !== null && customKittensCount > 0 
+    ? customKittensCount 
+    : Math.max(1, pCount); // pCount instead of pCount-1 because Streaking Kitten allows holding 1 bomb
+    
+  let desiredActionPoolSize = targetDeckSize - kittensCount - defusesInDeck + neededActionsForHands;
+  if (desiredActionPoolSize < neededActionsForHands) {
+    desiredActionPoolSize = neededActionsForHands;
+  }
+  
+  while (actionPool.length < desiredActionPoolSize) {
+    const keys = Object.keys(baseCardCounts);
+    actionPool.push(keys[Math.floor(Math.random() * keys.length)]);
+  }
+  
+  if (actionPool.length > desiredActionPoolSize) {
+    actionPool = actionPool.slice(0, desiredActionPoolSize);
+  }
+
+  // Shuffle the initial action pool
+  for (let i = actionPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [actionPool[i], actionPool[j]] = [actionPool[j], actionPool[i]];
+  }
+
+  // 2. Deal hands to players
+  const hands = {};
+  players.forEach(p => {
+    // Deal 1 Defuse and 4 random action cards
+    hands[p.id] = ['defuse', ...actionPool.splice(0, 4)];
+  });
+
+  // 3. Build the draw deck
+  // Remaining action cards + remaining Defuses + Kittens
+  let deck = [...actionPool];
+  
+  // Add remaining defuses to the deck (standard rules: total 6 defuses, leftover go to deck)
+  const leftoverDefuses = Math.max(0, 6 - pCount);
+  for (let i = 0; i < leftoverDefuses; i++) {
+    deck.push('defuse');
+  }
+
+  // Add exploding kittens and 1 imploding kitten
+  if (kittensCount > 0) {
+    deck.push('imploding-kitten'); // First bomb is Imploding Kitten
+    for (let i = 1; i < kittensCount; i++) {
+      deck.push('kitten');
+    }
+  }
+
+  // Shuffle final deck
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  // Shuffled turn order
+  const turnOrder = players.map(p => p.id);
+  for (let i = turnOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [turnOrder[i], turnOrder[j]] = [turnOrder[j], turnOrder[i]];
+  }
+
+  return {
+    deck,
+    discard: [],
+    hands,
+    turnOrder,
+    currentTurnIdx: 0,
+    currentPlayerId: turnOrder[0],
+    turnDirection: 1, // 1 for normal, -1 for reverse
+    attacksRemaining: 0, // > 0 means current player has extra turns to play
+    eliminated: [],
+    status: 'playing',
+    lastAction: 'เริ่มเกมแล้ว! ตาของ ' + (players.find(p => p.id === turnOrder[0])?.name || 'ผู้เล่นคนแรก'),
+    futureCards: null,
+    pendingKitten: null, // { player_id, card }
+    kittensSettings: {
+      deckSize: targetDeckSize,
+      bombCount: customKittensCount || 0
+    }
+  };
+}
+

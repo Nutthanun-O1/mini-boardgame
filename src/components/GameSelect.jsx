@@ -31,6 +31,14 @@ const GAMES = [
     available: true,
   },
   {
+    id: 'exploding-kittens',
+    title: 'Exploding Kittens',
+    description: 'หลบหลีกระเบิดแมวสุดป่วน ใช้การ์ดแกล้งเพื่อนเพื่อเอาชีวิตรอดเป็นคนสุดท้าย',
+    players: '2 – 5 คน',
+    duration: '10 – 15 นาที',
+    available: true,
+  },
+  {
     id: 'codenames',
     title: 'Codenames',
     description: 'ใบ้คำเพื่อให้ทีมทายคำลับ',

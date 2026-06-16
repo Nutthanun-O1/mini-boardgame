@@ -7,8 +7,8 @@ import AnimatedPage, { staggerContainer, fadeUpItem, tapScale, popIn } from './A
 export default function Lobby({
   roomCode, players, isDM, timerSetting, gameId,
   difficulty, dmMode, wordPick, playerName,
-  bannedDMs = [], onToggleBanDM,
-  onSetTimer, onSetDifficulty, onSetDmMode, onSetWordPick,
+  bannedDMs = [], onToggleBanDM, gameState,
+  onSetTimer, onSetDifficulty, onSetDmMode, onSetWordPick, onSetKittensSetting,
   onStartGame, onChangeName, error
 }) {
   const isInsider = gameId === 'insider';
@@ -90,6 +90,7 @@ export default function Lobby({
               value={timerSetting}
               onChange={e => onSetTimer(Number(e.target.value))}
             >
+              <option value={0}>ไม่จำกัด</option>
               <option value={180}>3 นาที</option>
               <option value={300}>5 นาที</option>
               <option value={420}>7 นาที</option>
@@ -179,6 +180,33 @@ export default function Lobby({
                   </motion.div>
                 )}
               </AnimatePresence>
+            </>
+          )}
+
+          {gameId === 'exploding-kittens' && (
+            <>
+              <div className="field">
+                <label className="field__label">จำนวนการ์ดในกองจั่วทั้งหมด</label>
+                <input
+                  type="number"
+                  className="field__input"
+                  value={gameState?.kittensSettings?.deckSize || 50}
+                  onChange={e => onSetKittensSetting('deckSize', Number(e.target.value))}
+                  min={10}
+                  max={200}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label">จำนวนระเบิด (0 = อัตโนมัติ: คนเล่น-1)</label>
+                <input
+                  type="number"
+                  className="field__input"
+                  value={gameState?.kittensSettings?.bombCount || 0}
+                  onChange={e => onSetKittensSetting('bombCount', Number(e.target.value))}
+                  min={0}
+                  max={20}
+                />
+              </div>
             </>
           )}
 

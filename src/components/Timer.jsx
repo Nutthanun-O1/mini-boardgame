@@ -1,6 +1,19 @@
 'use client';
 
 export default function Timer({ total, remaining, paused }) {
+  if (total === 0) {
+    return (
+      <div className={`timer ${paused ? 'timer--paused' : ''}`}>
+        <span className="timer__display">
+          {paused && '⏸ '}ไม่จำกัด
+        </span>
+        <div className="timer__track">
+          <div className="timer__fill" style={{ width: '100%', background: '#8b5cf6' }} />
+        </div>
+      </div>
+    );
+  }
+
   const progress = total > 0 ? remaining / total : 0;
   const isLow = remaining <= 30 && !paused;
   const minutes = Math.floor(remaining / 60);

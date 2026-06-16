@@ -6,6 +6,7 @@ import { getSupabase, getPlayerId, saveRoomSession, loadRoomSession, clearRoomSe
 import {
   generateRoomCode, pickWord, pickWordChoices, pickSpyfallLocation,
   ALL_SPYFALL_LOCATIONS, spyfallLocations as spyfallLocMap,
+  initKittensGame, KITTENS_CARDS
 } from '@/lib/gameData';
 import GameSelect from '@/components/GameSelect';
 import Home from '@/components/Home';
@@ -18,6 +19,8 @@ import SpyfallPlaying from '@/components/SpyfallPlaying';
 import SpyfallVoting from '@/components/SpyfallVoting';
 import SpyfallLastChance from '@/components/SpyfallLastChance';
 import SpyfallResult from '@/components/SpyfallResult';
+import KittensPlaying from '@/components/KittensPlaying';
+import KittensResult from '@/components/KittensResult';
 
 export default function Page() {
   // ── State ──dcsd
@@ -50,6 +53,9 @@ export default function Page() {
   const [spyfallLocations, setSpyfallLocations] = useState([]);
   const [spyfallVoteInfo, setSpyfallVoteInfo] = useState(null);
   const [spyfallLastChance, setSpyfallLastChance] = useState(null);
+
+  // ── Exploding Kittens state ──
+  const [kittensState, setKittensState] = useState(null);
 
   // ── Auto-return-to-lobby countdown ──
   const [countdown, setCountdown] = useState(null);
@@ -143,6 +149,7 @@ export default function Page() {
         setSpyfallVoteInfo(null);
         setSpyfallLastChance(null);
         setWordChoices(null);
+        setKittensState(null);
         break;
 
       case 'word-pick':
@@ -157,7 +164,9 @@ export default function Page() {
         timeUpFiredRef.current = false;
         setSpyfallVoteInfo(null);
 
-        if (room.game_id === 'spyfall') {
+        if (room.game_id === 'exploding-kittens') {
+          setKittensState(room.game_state);
+        } else if (room.game_id === 'spyfall') {
           const isSpy = pid === room.spy_id;
           setSpyfallLocation(isSpy ? null : room.spyfall_location_label);
           setSpyfallLocationKey(isSpy ? null : room.spyfall_location);
@@ -181,6 +190,9 @@ export default function Page() {
         setPhase('result');
         setTimerStartedAt(null);
         setResult(room.result);
+        if (room.game_id === 'exploding-kittens') {
+          setKittensState(room.game_state);
+        }
         break;
 
       case 'spyfall-voting':
@@ -268,6 +280,10 @@ export default function Page() {
     }
 
     const tick = () => {
+      if (timerTotal === 0) {
+        setTimeRemaining(0);
+        return;
+      }
       const elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
       const remaining = Math.max(0, timerTotal - elapsed);
       setTimeRemaining(remaining);
@@ -564,6 +580,25 @@ export default function Page() {
     await fetchPlayers(code);
   }
 
+  async function handleSetKittensSetting(key, value) {
+    const code = roomCodeRef.current;
+    const room = roomRef.current;
+    if (!code || !room) return;
+    
+    const currentState = room.game_state || {};
+    const settings = currentState.kittensSettings || { deckSize: 50, bombCount: 0 };
+    const newState = {
+      ...currentState,
+      kittensSettings: {
+        ...settings,
+        [key]: value
+      }
+    };
+    
+    // We only update the DB, realtime sync will fetch and process it
+    await getSupabase().from('rooms').update({ game_state: newState }).eq('code', code);
+  }
+
   async function handlePauseTimer() {
     const room = roomRef.current;
     if (!room || !room.timer_started_at || room.timer_started_at < 0) return;
@@ -645,7 +680,27 @@ export default function Page() {
       if (!room) return;
       const pls = playersRef.current;
 
-      if (room.game_id === 'spyfall') {
+      if (room.game_id === 'exploding-kittens') {
+        // ─── Exploding Kittens start ───
+        if (pls.length < 2) { setError('ต้องมีผู้เล่นอย่างน้อย 2 คน'); return; }
+
+        const kittensSettings = room.game_state?.kittensSettings || {};
+        const initialKittensState = initKittensGame(
+          pls, 
+          kittensSettings.deckSize || 50, 
+          kittensSettings.bombCount || null
+        );
+
+        const { error: err } = await getSupabase().from('rooms').update({
+          phase: 'playing',
+          timer_started_at: null,
+          game_state: initialKittensState,
+          roles: {},
+          result: null,
+        }).eq('code', code);
+        if (err) console.error('startGame exploding kittens error:', err);
+
+      } else if (room.game_id === 'spyfall') {
         // ─── Spyfall start ───
         if (pls.length < 3) { setError('ต้องมีผู้เล่นอย่างน้อย 3 คน'); return; }
 
@@ -909,6 +964,463 @@ export default function Page() {
     }).eq('code', code);
   }
 
+  function advanceKittensTurn(state) {
+    const aliveOrder = state.turnOrder.filter(id => !state.eliminated.includes(id));
+    if (aliveOrder.length <= 1) return;
+    
+    const dir = state.turnDirection || 1;
+    let nextIdx = state.currentTurnIdx;
+    do {
+      nextIdx = (nextIdx + dir + state.turnOrder.length) % state.turnOrder.length;
+    } while (state.eliminated.includes(state.turnOrder[nextIdx]));
+    
+    state.currentTurnIdx = nextIdx;
+    state.currentPlayerId = state.turnOrder[nextIdx];
+  }
+
+  async function handleKittensPlayCard(cardType, targetPlayerId) {
+    const code = roomCodeRef.current;
+    const pid = myId.current;
+    const pls = playersRef.current;
+    const myName = pls.find(p => p.id === pid)?.name || '???';
+
+    try {
+      const { data: room } = await getSupabase().from('rooms').select('game_state').eq('code', code).single();
+      if (!room || !room.game_state) return;
+      const state = { ...room.game_state };
+
+      if (cardType === 'nope') {
+        if (!state.pendingAction) return;
+        const nopeIdx = state.hands[pid].indexOf('nope');
+        if (nopeIdx !== -1) {
+          state.hands[pid].splice(nopeIdx, 1);
+          state.discard.push('nope');
+        }
+        state.pendingAction.nopeCount += 1;
+        state.pendingAction.expiresAt = Date.now() + 3000;
+        
+        let newEligibleNopers = [];
+        Object.entries(state.hands).forEach(([hpId, hand]) => {
+          if (hand.includes('nope')) newEligibleNopers.push(hpId);
+        });
+        state.pendingAction.eligibleNopers = newEligibleNopers;
+        state.pendingAction.declinedNopers = [];
+
+        if (newEligibleNopers.length === 0) {
+           if (state.pendingAction.nopeCount % 2 !== 0) {
+             state.lastAction = `การเล่นการ์ด ${state.pendingAction.cardType} ถูกหยุดด้วย Nope! 🛑`;
+             state.pendingAction = null;
+           } else {
+             const { cardType: origCard, initiatorId: origPid, targetId: origTarget } = state.pendingAction;
+             state.pendingAction = null;
+             executeCardAction(state, origCard, origPid, origTarget);
+           }
+        } else {
+           state.lastAction = `${myName} โยนการ์ด Nope! ขัดจังหวะ 🛑`;
+        }
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+
+      if (cardType === 'decline-nope') {
+        if (!state.pendingAction) return;
+        if (!state.pendingAction.declinedNopers) state.pendingAction.declinedNopers = [];
+        
+        if (!state.pendingAction.declinedNopers.includes(pid)) {
+           state.pendingAction.declinedNopers.push(pid);
+        }
+
+        const eligible = state.pendingAction.eligibleNopers || [];
+        if (state.pendingAction.declinedNopers.length >= eligible.length) {
+           if (state.pendingAction.nopeCount % 2 !== 0) {
+             state.lastAction = `การเล่นการ์ด ${state.pendingAction.cardType} ถูกหยุดด้วย Nope! 🛑`;
+             state.pendingAction = null;
+           } else {
+             const { cardType: origCard, initiatorId: origPid, targetId: origTarget } = state.pendingAction;
+             state.pendingAction = null;
+             executeCardAction(state, origCard, origPid, origTarget);
+           }
+        }
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+
+      if (state.currentPlayerId !== pid && cardType !== 'resolve-pending') return;
+
+      if (cardType === 'see-future-done') {
+        state.futureCards = null;
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+      if (cardType === 'share-future-done') {
+        state.sharedFutureCards = null;
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+      if (cardType === 'alter-future-done') {
+        // targetPlayerId holds the new ordered array for top 3
+        state.deck.splice(0, targetPlayerId.length, ...targetPlayerId);
+        state.alterFutureCards = null;
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+      if (cardType === 'pair') {
+        const { targetId, cardIndexes } = targetPlayerId;
+        const targetName = pls.find(p => p.id === targetId)?.name || '???';
+        
+        const sortedIndices = [...cardIndexes].sort((a, b) => b - a);
+        const card1 = state.hands[pid][sortedIndices[0]];
+        const card2 = state.hands[pid][sortedIndices[1]];
+        state.hands[pid].splice(sortedIndices[0], 1);
+        state.hands[pid].splice(sortedIndices[1], 1);
+        
+        state.discard.push(card1, card2);
+        
+        const targetHand = state.hands[targetId];
+        if (targetHand && targetHand.length > 0) {
+            const rIdx = Math.floor(Math.random() * targetHand.length);
+            const stolenCard = targetHand.splice(rIdx, 1)[0];
+            state.hands[pid].push(stolenCard);
+        }
+        
+        state.lastAction = `${myName} ใช้คอมโบไพ่คู่ ขโมยการ์ดแบบสุ่ม 1 ใบจาก ${targetName} 🐾`;
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+      
+      const executeCardAction = (execState, cType, execPid, execTargetId) => {
+        const execName = pls.find(p => p.id === execPid)?.name || '???';
+        const execTargetName = pls.find(p => p.id === execTargetId)?.name || '???';
+        
+        if (cType === 'skip') {
+          if (execState.attacksRemaining > 0) {
+            execState.attacksRemaining -= 1;
+            if (execState.attacksRemaining === 0) advanceKittensTurn(execState);
+          } else {
+            advanceKittensTurn(execState);
+          }
+          execState.lastAction = `${execName} เล่นการ์ด ข้าม 🏃`;
+        } 
+        else if (cType === 'super-skip') {
+          execState.attacksRemaining = 0;
+          advanceKittensTurn(execState);
+          execState.lastAction = `${execName} เล่นการ์ด ซูเปอร์ข้าม 🚀`;
+        }
+        else if (cType === 'attack') {
+          const dir = execState.turnDirection || 1;
+          let nextIdx = execState.currentTurnIdx;
+          do {
+            nextIdx = (nextIdx + dir + execState.turnOrder.length) % execState.turnOrder.length;
+          } while (execState.eliminated.includes(execState.turnOrder[nextIdx]));
+          
+          const targetId = execState.turnOrder[nextIdx];
+          const targetName = pls.find(p => p.id === targetId)?.name || '???';
+          
+          execState.attacksRemaining = (execState.attacksRemaining || 0) + 2;
+          advanceKittensTurn(execState);
+          execState.lastAction = `${execName} เล่นการ์ด โจมตี 💥 ส่งเทิร์นให้ ${targetName}`;
+        } 
+        else if (cType === 'targeted-attack') {
+          execState.attacksRemaining = (execState.attacksRemaining || 0) + 2;
+          const targetIdx = execState.turnOrder.indexOf(execTargetId);
+          if (targetIdx !== -1) {
+            execState.currentTurnIdx = targetIdx;
+            execState.currentPlayerId = execTargetId;
+          }
+          execState.lastAction = `${execName} เล่นการ์ด โจมตีระบุเป้าหมาย 💥 ใส่ ${execTargetName}`;
+        }
+        else if (cType === 'personal-attack') {
+          execState.attacksRemaining = (execState.attacksRemaining || 0) + 3;
+          execState.lastAction = `${execName} เล่นการ์ด โจมตีตัวเอง 🎯`;
+        }
+        else if (cType === 'reverse') {
+          execState.turnDirection = (execState.turnDirection || 1) * -1;
+          if (execState.attacksRemaining > 0) {
+            execState.attacksRemaining -= 1;
+            if (execState.attacksRemaining === 0) advanceKittensTurn(execState);
+          } else {
+            advanceKittensTurn(execState);
+          }
+          execState.lastAction = `${execName} เล่นการ์ด ย้อนกลับ 🔄`;
+        }
+        else if (cType === 'draw-from-bottom') {
+          const drawnCard = execState.deck.pop();
+          if (drawnCard === 'kitten' || drawnCard === 'imploding-kitten-face-up') {
+            execState.pendingKitten = { player_id: execPid, card: drawnCard };
+            execState.lastAction = `${execName} จั่วจากล่างสุด... ได้ระเบิด! 🙀`;
+          } else if (drawnCard === 'imploding-kitten') {
+            execState.pendingKitten = { player_id: execPid, card: drawnCard };
+            execState.lastAction = `${execName} จั่วได้ระเบิดหงายหน้า! ต้องใส่กลับลงกอง 💣`;
+          } else {
+            execState.hands[execPid].push(drawnCard);
+            if (execState.attacksRemaining > 0) {
+              execState.attacksRemaining -= 1;
+              if (execState.attacksRemaining === 0) advanceKittensTurn(execState);
+            } else {
+              advanceKittensTurn(execState);
+            }
+            execState.lastAction = `${execName} เล่นการ์ด จั่วจากล่างสุด ⬇️ ขึ้นมือ 1 ใบ`;
+          }
+        }
+        else if (cType === 'swap-top-bottom') {
+          if (execState.deck.length > 1) {
+            const top = execState.deck.shift();
+            const bottom = execState.deck.pop();
+            execState.deck.unshift(bottom);
+            execState.deck.push(top);
+          }
+          execState.lastAction = `${execName} เล่นการ์ด สลับบนล่าง ↕️`;
+        }
+        else if (cType === 'see-future') {
+          execState.futureCards = execState.deck.slice(0, 3);
+          execState.lastAction = `${execName} เล่นการ์ด มองเห็นอนาคต 🔮`;
+        }
+        else if (cType === 'alter-future') {
+          execState.alterFutureCards = execState.deck.slice(0, 3);
+          execState.lastAction = `${execName} เล่นการ์ด แก้ไขอนาคต ✨`;
+        }
+        else if (cType === 'share-future') {
+          execState.sharedFutureCards = execState.deck.slice(0, 3);
+          execState.lastAction = `${execName} เปิดอนาคตให้ทุกคนร่วมชะตากรรม 👁️`;
+        }
+        else if (cType === 'shuffle') {
+          for (let i = execState.deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [execState.deck[i], execState.deck[j]] = [execState.deck[j], execState.deck[i]];
+          }
+          execState.lastAction = `${execName} เล่นการ์ด สับไพ่ 🔀`;
+        } 
+        else if (cType === 'favor') {
+          execState.favorRequest = {
+            requesterId: execPid,
+            targetId: execTargetId,
+            resolved: false
+          };
+          execState.lastAction = `${execName} เล่นการ์ด ขอความช่วยเหลือ 🤝 จาก ${execTargetName}`;
+        }
+      };
+
+      if (cardType === 'resolve-pending') {
+        if (!state.pendingAction) return;
+        
+        if (state.pendingAction.nopeCount % 2 !== 0) {
+          state.lastAction = `การเล่นการ์ด ${state.pendingAction.cardType} ถูกหยุดด้วย Nope! 🛑`;
+          state.pendingAction = null;
+        } else {
+          const { cardType: origCard, initiatorId: origPid, targetId: origTarget } = state.pendingAction;
+          state.pendingAction = null;
+          executeCardAction(state, origCard, origPid, origTarget);
+        }
+        await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+        return;
+      }
+
+      const cardIdx = state.hands[pid].indexOf(cardType);
+      if (cardIdx === -1) return;
+      state.hands[pid].splice(cardIdx, 1);
+
+      state.discard.push(cardType);
+
+      // Buffer action if it's noped-able and someone has a nope
+      const nonNopeable = ['defuse', 'zombie-kitten'];
+      
+      let eligibleNopers = [];
+      Object.entries(state.hands).forEach(([hpId, hand]) => {
+        if (hand.includes('nope')) eligibleNopers.push(hpId);
+      });
+
+      if (!nonNopeable.includes(cardType) && eligibleNopers.length > 0) {
+        state.pendingAction = {
+          initiatorId: pid,
+          cardType,
+          targetId: targetPlayerId,
+          nopeCount: 0,
+          expiresAt: Date.now() + 3000,
+          eligibleNopers,
+          declinedNopers: []
+        };
+        state.lastAction = `${myName} กำลังใช้การ์ด ${cardType} ⏱️...`;
+      } else {
+        // Execute instantly
+        executeCardAction(state, cardType, pid, targetPlayerId);
+      }
+
+      await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+    } catch (err) {
+      console.error('handleKittensPlayCard error:', err);
+    }
+  }
+
+  async function handleKittensDrawCard() {
+    const code = roomCodeRef.current;
+    const pid = myId.current;
+    const pls = playersRef.current;
+    const myName = pls.find(p => p.id === pid)?.name || '???';
+
+    try {
+      const { data: room } = await getSupabase().from('rooms').select('game_state').eq('code', code).single();
+      if (!room || !room.game_state) return;
+      const state = { ...room.game_state };
+
+      if (state.currentPlayerId !== pid) return;
+
+      const drawnCard = state.deck.shift();
+      if (!drawnCard) return;
+
+      if (drawnCard === 'kitten' || drawnCard === 'imploding-kitten-face-up') {
+        const hasStreaking = state.hands[pid].includes('streaking-kitten');
+        if (drawnCard === 'kitten' && hasStreaking) {
+            state.hands[pid].push('kitten');
+            state.lastAction = `${myName} จั่วได้แมวระเบิด แต่รอดตายเพราะมี Streaking Kitten! 🙀🔥`;
+            if (state.attacksRemaining > 0) {
+              state.attacksRemaining -= 1;
+              if (state.attacksRemaining === 0) advanceKittensTurn(state);
+            } else {
+              advanceKittensTurn(state);
+            }
+        } else {
+            state.pendingKitten = {
+              player_id: pid,
+              card: drawnCard
+            };
+            state.lastAction = drawnCard === 'kitten' ? `${myName} จั่วได้การ์ดแมวระเบิด! 🙀` : `${myName} จั่วโดนแมวระเบิดหงายหน้า! (Imploding Kitten) ตายทันที! 💣`;
+        }
+      } else if (drawnCard === 'imploding-kitten') {
+        state.pendingKitten = {
+          player_id: pid,
+          card: 'imploding-kitten'
+        };
+        state.lastAction = `${myName} จั่วได้แมวระเบิดหงายหน้า! ต้องใส่กลับลงกอง 💣`;
+      } else {
+        state.hands[pid].push(drawnCard);
+        
+        if (state.attacksRemaining > 0) {
+          state.attacksRemaining -= 1;
+          if (state.attacksRemaining === 0) {
+            advanceKittensTurn(state);
+          }
+        } else {
+          advanceKittensTurn(state);
+        }
+        
+        state.lastAction = `${myName} จั่วการ์ดขึ้นมือ 1 ใบ`;
+      }
+
+      await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+    } catch (err) {
+      console.error('handleKittensDrawCard error:', err);
+    }
+  }
+
+  async function handleKittensDefuseKitten(insertIndex, defuseCardType = 'defuse', reviveTargetId = null) {
+    const code = roomCodeRef.current;
+    const pid = myId.current;
+    const pls = playersRef.current;
+    const myName = pls.find(p => p.id === pid)?.name || '???';
+
+    try {
+      const { data: room } = await getSupabase().from('rooms').select('game_state').eq('code', code).single();
+      if (!room || !room.game_state) return;
+      const state = { ...room.game_state };
+
+      if (state.pendingKitten?.player_id !== pid) return;
+
+      const pendingCard = state.pendingKitten.card;
+      state.pendingKitten = null;
+
+      if (insertIndex === -1) {
+        state.discard.push(...(state.hands[pid] || []));
+        state.hands[pid] = [];
+        
+        state.eliminated.push(pid);
+        state.lastAction = `${myName} โดนระเบิดตูม! ตกรอบ 💀`;
+        state.attacksRemaining = 0;
+
+        const alive = state.turnOrder.filter(id => !state.eliminated.includes(id));
+        if (alive.length === 1) {
+          const winnerId = alive[0];
+          const winnerName = pls.find(p => p.id === winnerId)?.name || '???';
+          
+          await getSupabase().from('rooms').update({
+            phase: 'result',
+            result: {
+              winner: winnerId,
+              winnerName,
+              eliminationHistory: state.eliminated,
+              players: pls
+            },
+            game_state: state
+          }).eq('code', code);
+          return;
+        } else {
+          advanceKittensTurn(state);
+        }
+      } else {
+        if (pendingCard === 'imploding-kitten') {
+          state.deck.splice(insertIndex, 0, 'imploding-kitten-face-up');
+        } else if (pendingCard === 'kitten') {
+          const defuseIdx = state.hands[pid].indexOf(defuseCardType);
+          if (defuseIdx !== -1) {
+            state.hands[pid].splice(defuseIdx, 1);
+            state.discard.push(defuseCardType);
+          }
+          
+          if (defuseCardType === 'zombie-kitten' && reviveTargetId) {
+             state.eliminated = state.eliminated.filter(id => id !== reviveTargetId);
+             const revivedName = pls.find(p => p.id === reviveTargetId)?.name || 'ใครบางคน';
+             state.lastAction = `${myName} รอดตาย และใช้พลังชุบชีวิต ${revivedName} กลับมา! 🧟`;
+          }
+
+          state.deck.splice(insertIndex, 0, 'kitten');
+        }
+
+        if (state.attacksRemaining > 0) {
+          state.attacksRemaining -= 1;
+          if (state.attacksRemaining === 0) {
+            advanceKittensTurn(state);
+          }
+        } else {
+          advanceKittensTurn(state);
+        }
+      }
+
+      await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+    } catch (err) {
+      console.error('handleKittensDefuseKitten error:', err);
+    }
+  }
+
+  async function handleKittensGiveFavor(cardType) {
+    const code = roomCodeRef.current;
+    const pid = myId.current;
+    const pls = playersRef.current;
+
+    try {
+      const { data: room } = await getSupabase().from('rooms').select('game_state').eq('code', code).single();
+      if (!room || !room.game_state) return;
+      const state = { ...room.game_state };
+
+      if (!state.favorRequest || state.favorRequest.targetId !== pid) return;
+
+      const requesterId = state.favorRequest.requesterId;
+      const giverName = pls.find(p => p.id === pid)?.name || '???';
+      const receiverName = pls.find(p => p.id === requesterId)?.name || '???';
+
+      const cardIdx = state.hands[pid].indexOf(cardType);
+      if (cardIdx === -1) return;
+      state.hands[pid].splice(cardIdx, 1);
+
+      state.hands[requesterId].push(cardType);
+
+      state.favorRequest = null;
+      state.lastAction = `${giverName} มอบการ์ด ${KITTENS_CARDS[cardType]?.label || cardType} ให้แก่ ${receiverName} 🤝`;
+
+      await getSupabase().from('rooms').update({ game_state: state }).eq('code', code);
+    } catch (err) {
+      console.error('handleKittensGiveFavor error:', err);
+    }
+  }
+
   async function handlePlayAgain() {
     const code = roomCodeRef.current;
     if (!code) return;
@@ -1079,6 +1591,7 @@ export default function Page() {
   //  Render
   // ══════════════════════════════════════════════
   const isSpyfall = gameId === 'spyfall';
+  const isKittens = gameId === 'exploding-kittens';
   const timerPaused = timerStartedAt !== null && timerStartedAt < 0;
   const shared = { isDM, players, word, category, error, roomCode, playerName };
 
@@ -1130,12 +1643,14 @@ export default function Page() {
               difficulty={difficulty}
               dmMode={dmMode}
               wordPick={wordPick}
+              gameState={roomRef.current?.game_state}
               onSetTimer={handleSetTimer}
               onSetDifficulty={handleSetDifficulty}
               onSetDmMode={handleSetDmMode}
               onSetWordPick={handleSetWordPick}
               bannedDMs={bannedDMs}
               onToggleBanDM={handleToggleBanDM}
+              onSetKittensSetting={handleSetKittensSetting}
               onStartGame={handleStartGame}
               onChangeName={handleChangeName}
             />
@@ -1152,7 +1667,7 @@ export default function Page() {
           )}
 
           {/* ── Insider phases ── */}
-          {phase === 'playing' && !isSpyfall && (
+          {phase === 'playing' && !isSpyfall && !isKittens && (
             <Playing
               key="playing"
               {...shared}
@@ -1165,6 +1680,18 @@ export default function Page() {
               onGuessCorrect={handleGuessCorrect}
             />
           )}
+          {phase === 'playing' && isKittens && kittensState && (
+            <KittensPlaying
+              key="kittens-playing"
+              gameState={kittensState}
+              myId={myId.current}
+              players={players}
+              onPlayCard={handleKittensPlayCard}
+              onDrawCard={handleKittensDrawCard}
+              onDefuseKitten={handleKittensDefuseKitten}
+              onGiveFavor={handleKittensGiveFavor}
+            />
+          )}
           {phase === 'discussion' && (
             <Discussion
               key="discussion"
@@ -1173,12 +1700,19 @@ export default function Page() {
               onRevealInsider={handleRevealInsider}
             />
           )}
-          {phase === 'result' && !isSpyfall && (
+          {phase === 'result' && !isSpyfall && !isKittens && (
             <Result
               key="result"
               {...shared}
               result={result}
               myRole={myRole}
+              countdown={countdown}
+            />
+          )}
+          {phase === 'result' && !isSpyfall && isKittens && (
+            <KittensResult
+              key="kittens-result"
+              result={result}
               countdown={countdown}
             />
           )}
