@@ -58,6 +58,7 @@ export default function KittensPlaying({
   }, [gameState.alterFutureCards]);
   const [defusePosition, setDefusePosition] = useState(0); // 0 = top of deck
   const [focusedCard, setFocusedCard] = useState(null);
+  const [showDrawConfirm, setShowDrawConfirm] = useState(false);
 
   const {
     deck,
@@ -418,16 +419,36 @@ export default function KittensPlaying({
         }
 
         /* 💥 Exploding Kitten Premium UI */
-        @keyframes pulse-danger {
-          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-          70% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
         .modal-content.exploding-theme {
+          position: relative;
           background: linear-gradient(145deg, #2a0f14 0%, #170505 100%);
           border: 2px solid rgba(239, 68, 68, 0.5);
-          animation: pulse-danger 2s infinite;
+          overflow: visible; /* Make glowing ring visible */
         }
+        
+        /* Hardware accelerated pulse outer ring */
+        .modal-content.exploding-theme::before {
+          content: '';
+          position: absolute;
+          top: -2px; left: -2px; right: -2px; bottom: -2px;
+          border: 2px solid #ef4444;
+          border-radius: 20px;
+          opacity: 0;
+          pointer-events: none;
+          animation: pulse-danger-accelerated 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+        }
+        
+        @keyframes pulse-danger-accelerated {
+          0% {
+            transform: scale(1);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(1.18);
+            opacity: 0;
+          }
+        }
+        
         .exploding-title {
           font-size: 1.8rem;
           font-weight: 900;
@@ -472,6 +493,82 @@ export default function KittensPlaying({
           border-radius: 16px 16px 0 0;
           background: repeating-linear-gradient(45deg, #ef4444, #ef4444 10px, transparent 10px, transparent 20px);
         }
+        
+        /* 🎇 Floating sparks/embers */
+        .sparks-container {
+          position: absolute;
+          top: 0; left: 0; width: 100%; height: 100%;
+          pointer-events: none;
+          overflow: hidden;
+          border-radius: 20px;
+          z-index: 1;
+        }
+        .spark {
+          position: absolute;
+          bottom: 0;
+          border-radius: 50%;
+          opacity: 0;
+          background: #f59e0b;
+          filter: drop-shadow(0 0 6px #ef4444);
+        }
+        .spark-0 { left: 12%; animation: float-spark 2.2s infinite 0.1s; width: 4px; height: 4px; }
+        .spark-1 { left: 28%; animation: float-spark 2.8s infinite 0.7s; width: 5px; height: 5px; }
+        .spark-2 { left: 45%; animation: float-spark 2.5s infinite 1.3s; width: 3px; height: 3px; }
+        .spark-3 { left: 62%; animation: float-spark 3.1s infinite 0.4s; width: 4px; height: 4px; }
+        .spark-4 { left: 78%; animation: float-spark 2.6s infinite 1.8s; width: 5px; height: 5px; }
+        .spark-5 { left: 90%; animation: float-spark 3.0s infinite 1.0s; width: 3px; height: 3px; }
+        .spark-6 { left: 22%; animation: float-spark 2.7s infinite 2.2s; width: 4px; height: 4px; }
+        .spark-7 { left: 73%; animation: float-spark 3.3s infinite 0.2s; width: 5px; height: 5px; }
+        
+        @keyframes float-spark {
+          0% { transform: translateY(10px) scale(0.5); opacity: 0; }
+          40% { opacity: 0.9; }
+          100% { transform: translateY(-160px) scale(1.6); opacity: 0; }
+        }
+        
+        /* 🚨 Fullscreen Edge Danger Warning */
+        .overlay-modal.exploding-vignette {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.7);
+          pointer-events: none;
+          z-index: 105;
+          animation: vignette-pulse-h 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes vignette-pulse-h {
+          0% { opacity: 0.3; }
+          100% { opacity: 0.95; }
+        }
+        
+        /* 🎛️ Premium Ranges */
+        .defuse-zone input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 6px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+          outline: none;
+          margin: 0.5rem 0;
+        }
+        .defuse-zone input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #10b981;
+          cursor: pointer;
+          box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+          transition: transform 0.1s, background-color 0.1s;
+        }
+        .defuse-zone input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.25);
+        }
+        .defuse-zone input[type="range"].slider-danger::-webkit-slider-thumb {
+          background: #ef4444;
+          box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+        }
       `}</style>
 
       <div className="kittens-game">
@@ -509,7 +606,7 @@ export default function KittensPlaying({
                 {deck.length > 0 && (
                   <div
                     className={`card-back ${!isMyTurn || isEliminated ? 'disabled' : ''}`}
-                    onClick={() => isMyTurn && !isEliminated && onDrawCard()}
+                    onClick={() => isMyTurn && !isEliminated && setShowDrawConfirm(true)}
                     title={isMyTurn && !isEliminated ? "คลิกเพื่อจั่วการ์ด" : ""}
                   />
                 )}
@@ -856,164 +953,190 @@ export default function KittensPlaying({
       {/* 🙀 Exploding Kitten drawn Modal */}
       <AnimatePresence>
         {amDefusing && (
-          <motion.div
-            className="overlay-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{ zIndex: 110 }}
-          >
+          <>
+            <div className="overlay-modal exploding-vignette" />
             <motion.div
-              className="modal-content exploding-theme"
-              initial={{ scale: 0.8, y: 50, rotate: -5 }}
-              animate={{ scale: 1, y: 0, rotate: 0 }}
-              transition={{ type: 'spring', bounce: 0.5, duration: 0.6 }}
+              className="overlay-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{ zIndex: 110 }}
             >
-              <motion.div 
-                className="exploding-icon"
-                animate={{ scale: [1, 1.2, 1], rotate: [0, -10, 10, -10, 10, 0] }}
-                transition={{ duration: 0.5, delay: 0.2 }}
+              <motion.div
+                className="modal-content exploding-theme"
+                initial={{ scale: 0.8, y: 50, rotate: -5 }}
+                animate={{ 
+                  scale: 1, 
+                  rotate: 0,
+                  x: [0, -1, 1, -0.5, 0.5, -1, 1, 0],
+                  y: [0, 0.5, -0.5, 1, -1, 0.5, -0.5, 0]
+                }}
+                transition={{
+                  x: { repeat: Infinity, duration: 0.25, ease: "linear" },
+                  y: { repeat: Infinity, duration: 0.25, ease: "linear" },
+                  default: { type: 'spring', bounce: 0.5, duration: 0.6 }
+                }}
               >
-                {pendingKitten.card === 'imploding-kitten' ? '💣' : '🧨'}
-              </motion.div>
-              <h3 className="exploding-title">
-                {pendingKitten.card === 'imploding-kitten' ? 'แมวระเบิดหงายหน้า!' : 'แมวระเบิดทำงาน!'}
-              </h3>
-              
-              {pendingKitten.card === 'imploding-kitten' ? (
-                <>
-                  <p className="modal-desc" style={{ color: '#fcd34d', fontSize: '1rem' }}>
-                    ⚠️ คุณจั่วได้ <strong>Imploding Kitten</strong>! <br /> 
-                    คุณต้องนำมันใส่กลับลงกองแบบ "หงายหน้า"
-                  </p>
-                  
-                  <div className="defuse-zone">
-                    <div className="slider-labels" style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
-                      <span style={{ color: '#ef4444' }}>วางบนสุด</span>
-                      <span style={{ color: '#10b981' }}>ซ่อนลึกสุด (ใบที่ {deck.length + 1})</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max={deck.length}
-                      value={defusePosition}
-                      onChange={(e) => setDefusePosition(parseInt(e.target.value))}
-                      style={{ height: '8px', borderRadius: '4px' }}
-                    />
-                    <motion.div 
-                      key={defusePosition}
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}
-                    >
-                      <p style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#10b981', margin: 0 }}>
-                        📍 {defusePosition === 0 ? 'แกล้งคนต่อไป! (วางไว้บนสุด)' : `ซ่อนไว้ใบที่ ${defusePosition + 1}`}
-                      </p>
-                    </motion.div>
-                  </div>
+                {/* Floating sparks/embers */}
+                <div className="sparks-container">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className={`spark spark-${i}`} />
+                  ))}
+                </div>
 
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="btn btn--danger btn--lg"
-                    onClick={() => onDefuseKitten(defusePosition, 'imploding-kitten')}
-                    style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem' }}
-                  >
-                    💣 นำใส่กองแบบหงายหน้า!
-                  </motion.button>
-                </>
-              ) : (hasDefuse && pendingKitten.card !== 'imploding-kitten-face-up') ? (
-                <>
-                  <p className="modal-desc" style={{ color: '#fcd34d', fontSize: '1rem' }}>
-                    ⚠️ โชคดีที่คุณมีการ์ดกู้ระเบิด! <br /> 
-                    ซ่อนแมวระเบิดกลับเข้าไปในกองจั่วเพื่อเอาชีวิตรอด
-                  </p>
-                  
-                  <div className="defuse-zone">
-                    <div className="slider-labels" style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
-                      <span style={{ color: '#ef4444' }}>วางบนสุด</span>
-                      <span style={{ color: '#10b981' }}>ซ่อนลึกสุด (ใบที่ {deck.length + 1})</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max={deck.length}
-                      value={defusePosition}
-                      onChange={(e) => setDefusePosition(parseInt(e.target.value))}
-                      style={{ height: '8px', borderRadius: '4px' }}
-                    />
-                    <motion.div 
-                      key={defusePosition}
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}
-                    >
-                      <p style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#10b981', margin: 0 }}>
-                        📍 {defusePosition === 0 ? 'แกล้งคนต่อไป! (วางไว้บนสุด)' : `ซ่อนไว้ใบที่ ${defusePosition + 1}`}
-                      </p>
-                    </motion.div>
-                  </div>
-
-                  {myHand.includes('defuse') && (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="btn btn--success btn--lg"
-                      onClick={() => onDefuseKitten(defusePosition, 'defuse')}
-                      style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem', marginBottom: '0.5rem', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)' }}
-                    >
-                      🛡️ ใช้การ์ดกู้ระเบิด (Defuse)!
-                    </motion.button>
-                  )}
-                  {myHand.includes('zombie-kitten') && (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="btn btn--accent btn--lg"
-                      onClick={() => {
-                        const deadPlayers = eliminated;
-                        if (deadPlayers.length > 0) {
-                          setPendingActionType('zombie-revive');
-                          setShowTargetModal(true);
-                        } else {
-                          onDefuseKitten(defusePosition, 'zombie-kitten');
-                        }
-                      }}
-                      style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)' }}
-                    >
-                      🧟 ใช้ Zombie Kitten (ชุบชีวิต)!
-                    </motion.button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="death-zone">
-                    <p className="modal-desc" style={{ color: '#fca5a5', fontSize: '1.1rem', margin: 0 }}>
-                      คุณไม่มีการ์ดกู้ระเบิดเหลืออยู่...<br />
-                      <strong style={{ fontSize: '1.4rem', display: 'block', marginTop: '0.5rem' }}>ตูมมมมมมมมมม! 💥</strong>
+                <motion.div 
+                  className="exploding-icon"
+                  animate={{ 
+                    scale: [1, 1.15, 1],
+                    rotate: [0, -4, 4, -4, 4, 0]
+                  }}
+                  transition={{ 
+                    scale: { repeat: Infinity, duration: 0.6, ease: "easeInOut" },
+                    rotate: { repeat: Infinity, duration: 1.0, ease: "easeInOut" }
+                  }}
+                >
+                  {pendingKitten.card === 'imploding-kitten' ? '💣' : '🧨'}
+                </motion.div>
+                <h3 className="exploding-title">
+                  {pendingKitten.card === 'imploding-kitten' ? 'แมวระเบิดหงายหน้า!' : 'แมวระเบิดทำงาน!'}
+                </h3>
+                
+                {pendingKitten.card === 'imploding-kitten' ? (
+                  <>
+                    <p className="modal-desc" style={{ color: '#fcd34d', fontSize: '1rem', zIndex: 2 }}>
+                      ⚠️ คุณจั่วได้ <strong>Imploding Kitten</strong>! <br /> 
+                      คุณต้องนำมันใส่กลับลงกองแบบ "หงายหน้า"
                     </p>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="btn btn--lg"
-                    onClick={() => onDefuseKitten(-1)} // -1 represents exploding/elimination
-                    style={{ 
-                      width: '100%', 
-                      background: 'linear-gradient(135deg, #7f1d1d, #450a0a)',
-                      color: '#fca5a5',
-                      border: '1px solid #ef4444',
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      padding: '1rem'
-                    }}
-                  >
-                    💀 ยอมรับชะตากรรม
-                  </motion.button>
-                </>
-              )}
+                    
+                    <div className="defuse-zone" style={{ zIndex: 2 }}>
+                      <div className="slider-labels" style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
+                        <span style={{ color: '#ef4444' }}>วางบนสุด</span>
+                        <span style={{ color: '#10b981' }}>ซ่อนลึกสุด (ใบที่ {deck.length + 1})</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        className="slider-danger"
+                        max={deck.length}
+                        value={defusePosition}
+                        onChange={(e) => setDefusePosition(parseInt(e.target.value))}
+                      />
+                      <motion.div 
+                        key={defusePosition}
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                      >
+                        <p style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#10b981', margin: 0 }}>
+                          📍 {defusePosition === 0 ? 'แกล้งคนต่อไป! (วางไว้บนสุด)' : `ซ่อนไว้ใบที่ ${defusePosition + 1}`}
+                        </p>
+                      </motion.div>
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="btn btn--danger btn--lg"
+                      onClick={() => onDefuseKitten(defusePosition, 'imploding-kitten')}
+                      style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem', zIndex: 2 }}
+                    >
+                      💣 นำใส่กองแบบหงายหน้า!
+                    </motion.button>
+                  </>
+                ) : (hasDefuse && pendingKitten.card !== 'imploding-kitten-face-up') ? (
+                  <>
+                    <p className="modal-desc" style={{ color: '#fcd34d', fontSize: '1rem', zIndex: 2 }}>
+                      ⚠️ โชคดีที่คุณมีการ์ดกู้ระเบิด! <br /> 
+                      ซ่อนแมวระเบิดกลับเข้าไปในกองจั่วเพื่อเอาชีวิตรอด
+                    </p>
+                    
+                    <div className="defuse-zone" style={{ zIndex: 2 }}>
+                      <div className="slider-labels" style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
+                        <span style={{ color: '#ef4444' }}>วางบนสุด</span>
+                        <span style={{ color: '#10b981' }}>ซ่อนลึกสุด (ใบที่ {deck.length + 1})</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        className="slider-success"
+                        max={deck.length}
+                        value={defusePosition}
+                        onChange={(e) => setDefusePosition(parseInt(e.target.value))}
+                      />
+                      <motion.div 
+                        key={defusePosition}
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                      >
+                        <p style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#10b981', margin: 0 }}>
+                          📍 {defusePosition === 0 ? 'แกล้งคนต่อไป! (วางไว้บนสุด)' : `ซ่อนไว้ใบที่ ${defusePosition + 1}`}
+                        </p>
+                      </motion.div>
+                    </div>
+
+                    {myHand.includes('defuse') && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="btn btn--success btn--lg"
+                        onClick={() => onDefuseKitten(defusePosition, 'defuse')}
+                        style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem', marginBottom: '0.5rem', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)', zIndex: 2 }}
+                      >
+                        🛡️ ใช้การ์ดกู้ระเบิด (Defuse)!
+                      </motion.button>
+                    )}
+                    {myHand.includes('zombie-kitten') && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="btn btn--accent btn--lg"
+                        onClick={() => {
+                          const deadPlayers = eliminated;
+                          if (deadPlayers.length > 0) {
+                            setPendingActionType('zombie-revive');
+                            setShowTargetModal(true);
+                          } else {
+                            onDefuseKitten(defusePosition, 'zombie-kitten');
+                          }
+                        }}
+                        style={{ width: '100%', fontSize: '1.1rem', fontWeight: 'bold', padding: '1rem', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)', zIndex: 2 }}
+                      >
+                        🧟 ใช้ Zombie Kitten (ชุบชีวิต)!
+                      </motion.button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="death-zone" style={{ zIndex: 2 }}>
+                      <p className="modal-desc" style={{ color: '#fca5a5', fontSize: '1.1rem', margin: 0 }}>
+                        คุณไม่มีการ์ดกู้ระเบิดเหลืออยู่...<br />
+                        <strong style={{ fontSize: '1.4rem', display: 'block', marginTop: '0.5rem' }}>ตูมมมมมมมมมม! 💥</strong>
+                      </p>
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="btn btn--lg"
+                      onClick={() => onDefuseKitten(-1)} // -1 represents exploding/elimination
+                      style={{ 
+                        width: '100%', 
+                        background: 'linear-gradient(135deg, #7f1d1d, #450a0a)',
+                        color: '#fca5a5',
+                        border: '1px solid #ef4444',
+                        fontSize: '1.1rem',
+                        fontWeight: 'bold',
+                        padding: '1rem',
+                        zIndex: 2
+                      }}
+                    >
+                      💀 ยอมรับชะตากรรม
+                    </motion.button>
+                  </>
+                )}
+              </motion.div>
             </motion.div>
-          </motion.div>
+          </>
         )}
       </AnimatePresence>
       {/* 🔍 Focus Card Modal */}
@@ -1086,6 +1209,82 @@ export default function KittensPlaying({
                 >
                   👇 เก็บลงมือ
                 </motion.button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🃏 Draw Confirmation Overlay */}
+      <AnimatePresence>
+        {showDrawConfirm && (
+          <div className="overlay-modal" onClick={() => setShowDrawConfirm(false)}>
+            <motion.div
+              className="modal-content animate-pop"
+              initial={{ scale: 0.8, opacity: 0, y: 50 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, y: 50 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ 
+                background: 'linear-gradient(145deg, #1e1e2d 0%, #11111a 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '2rem',
+                maxWidth: '380px'
+              }}
+            >
+              <h3 className="modal-title" style={{ color: '#fca5a5', fontSize: '1.4rem' }}>
+                🃏 ต้องการจั่วการ์ดหรือไม่?
+              </h3>
+              <p className="modal-desc" style={{ marginBottom: '1rem' }}>
+                หากพร้อมแล้ว กดจั่วการ์ดเพื่อสิ้นสุดเทิร์นของคุณ
+              </p>
+              
+              {/* Display of card back with float animation */}
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                style={{
+                  width: '120px',
+                  height: '174px',
+                  background: 'url(/images/explode-cat/backcard.png) center/cover no-repeat',
+                  borderRadius: '16px',
+                  border: '3px solid #ff5a5f',
+                  boxShadow: '0 12px 24px rgba(255, 90, 95, 0.3), 0 0 20px rgba(0,0,0,0.5)',
+                  margin: '1rem 0'
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '1rem', width: '100%', marginTop: '1rem' }}>
+                <button 
+                  className="btn btn--danger" 
+                  style={{ 
+                    flex: 1, 
+                    padding: '0.8rem', 
+                    fontSize: '1rem',
+                    background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                  }}
+                  onClick={() => {
+                    onDrawCard();
+                    setShowDrawConfirm(false);
+                  }}
+                >
+                  🔥 จั่วการ์ด
+                </button>
+                <button 
+                  className="btn btn--secondary" 
+                  style={{ 
+                    flex: 1, 
+                    padding: '0.8rem', 
+                    fontSize: '1rem',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#fff'
+                  }}
+                  onClick={() => setShowDrawConfirm(false)}
+                >
+                  ❌ ค่อยจั่ว (วางคืน)
+                </button>
               </div>
             </motion.div>
           </div>
